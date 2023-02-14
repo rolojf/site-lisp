@@ -1,8 +1,14 @@
 (require 'key-chord)
+(use-package use-package-chords
+             :straight t
+             :config (key-chord-mode 1)
+             )
+
 (key-chord-mode 1)
 (key-chord-define-global "xk" 'kill-buffer)
 (key-chord-define-global "xf" 'find-file)
 (key-chord-define-global "xc" 'save-buffers-kill-terminal)
+(key-chord-define-global "xr" 'consult-ripgrep)
 (key-chord-define-global "xs" 'save-buffer)
 (key-chord-define-global "xg" 'magit-status)
 (key-chord-define-global "xo" 'other-window)

@@ -1,19 +1,20 @@
-;; (use-package dired-open
-;;   :straight t
-;;   :config
-;;   ;; Doesn't work as expected!
-;;   ;;(add-to-list 'dired-open-functions #'dired-open-xdg t)
-;;   (setq dired-open-extensions '(("png" . "feh")
-;;                                 ("mkv" . "mpv"))))
+(use-package dired-open
+  :straight t
+  :config
+  ;; Doesn't work as expected!
+  ;;(add-to-list 'dired-open-functions #'dired-open-xdg t)
+  (setq dired-open-extensions '(("png" . "feh")
+                                ("pdf" . "okular")
+                                ("mkv" . "mpv")
+                                ("mp4" . "mpv")
+                                )))
 
-(crafted-package-install-package 'dired-hide-dotfiles)
-(defun my-dired-mode-hook ()
-  "My `dired' mode hook."
-  ;; To hide dot-files by default
-  (dired-hide-dotfiles-mode))
-
-(eval-after-load "dired" '(progn
-  (define-key dired-mode-map (kbd "b") 'my-dired-mode-hook) ))
+(use-package dired-hide-dotfiles
+  :straight t
+  :hook (dired-mode . dired-hide-dotfiles-mode)
+  :config
+  (define-key dired-mode-map "h" #'dired-hide-dotfiles-mode)
+  )
 
 
 (setq dired-listing-switches "-alGhvF --group-directories-first") ; default: "-al"
@@ -24,6 +25,10 @@
             (dired-hide-details-mode)
             )
           )
+
+
+(use-package ztree
+  :straight t)
 
 ;; dired-find-file-or-do-async-shell-command ()
 

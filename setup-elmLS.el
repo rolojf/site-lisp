@@ -4,9 +4,9 @@
   :straight t
   :defer t
   :chords (
-           ("wn" . eglot-rename)
+           ("wr" . eglot-rename)
            ("wa" . eglot-code-actions)
-           ("wr" . xref-find-references)
+           ("wf" . xref-find-references)
            ("wc" . consult-eglot-symbols)
            )
   :bind (:map elm-mode-map
@@ -21,7 +21,7 @@
               (eglot-ensure)
               (elm-format-on-save-mode)
               ))
-  (add-hook 'elm-mode-hook 'outshine-mode)
+  (add-hook 'elm-mode-hook 'outli-mode)
   )
 
 (provide 'setup-elmLS)

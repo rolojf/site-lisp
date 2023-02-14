@@ -3,19 +3,19 @@
 
 ;;; Code:
 
-;; (maybe-require-package 'org-cliplink)
+(maybe-require-package 'org-cliplink)
 
 (define-key global-map (kbd "C-c l") 'org-store-link)
 (define-key global-map (kbd "C-c a") 'org-agenda)
-(global-set-key (kbd "C-c c") 'org-capture)
 
-;;(defvar sanityinc/org-global-prefix-map (make-sparse-keymap)
-;;  "A keymap for handy global access to org helpers, particularly clocking.")
-;;(define-key sanityinc/org-global-prefix-map (kbd "j") 'org-clock-goto)
-;;(define-key sanityinc/org-global-prefix-map (kbd "l") 'org-clock-in-last)
-;;(define-key sanityinc/org-global-prefix-map (kbd "i") 'org-clock-in)
-;;(define-key sanityinc/org-global-prefix-map (kbd "o") 'org-clock-out)
-;;(define-key global-map (kbd "C-c o") sanityinc/org-global-prefix-map)
+(defvar sanityinc/org-global-prefix-map (make-sparse-keymap)
+  "A keymap for handy global access to org helpers, particularly clocking.")
+
+(define-key sanityinc/org-global-prefix-map (kbd "j") 'org-clock-goto)
+(define-key sanityinc/org-global-prefix-map (kbd "l") 'org-clock-in-last)
+(define-key sanityinc/org-global-prefix-map (kbd "i") 'org-clock-in)
+(define-key sanityinc/org-global-prefix-map (kbd "o") 'org-clock-out)
+(define-key global-map (kbd "C-c o") sanityinc/org-global-prefix-map)
 
 
 ;; Various preferences
@@ -28,69 +28,75 @@
        )
 
 ;; Re-align tags when window shape changes
-;;(with-eval-after-load 'org-agenda
-;;  (add-hook 'org-agenda-mode-hook
-;;            (lambda () (add-hook 'window-configuration-change-hook 'org-agenda-align-tags nil t))))
+(with-eval-after-load 'org-agenda
+  (add-hook 'org-agenda-mode-hook
+            (lambda () (add-hook 'window-configuration-change-hook 'org-agenda-align-tags nil t))))
 
 
 (setq org-support-shift-select t)
 
+;;; Capturing
 
-;;(setq org-capture-templates
-;;      `(("t" "todo" entry (file "")  ; "" => `org-default-notes-file'
-;;         "* NEXT %?\n%U\n" :clock-resume t)
-;;        ("n" "note" entry (file "")
-;;         "* %? :NOTE:\n%U\n%a\n" :clock-resume t)
-;;        ))
+(global-set-key (kbd "C-c c") 'org-capture)
+
+(setq org-capture-templates
+      `(("t" "todo" entry (file "")  ; "" => `org-default-notes-file'
+         "* NEXT %?\n%U\n" :clock-resume t)
+        ("n" "note" entry (file "")
+         "* %? :NOTE:\n%U\n%a\n" :clock-resume t)
+        ))
 
 
+
 ;;; Refiling
 
-;;(setq org-refile-use-cache nil)
+(setq org-refile-use-cache nil)
 
 ;; Targets include this file and any file contributing to the agenda - up to 5 levels deep
-;;(setq org-refile-targets '((nil :maxlevel . 5) (org-agenda-files :maxlevel . 5)))
+(setq org-refile-targets '((nil :maxlevel . 5) (org-agenda-files :maxlevel . 5)))
 
-;;(with-eval-after-load 'org-agenda
-;;  (add-to-list 'org-agenda-after-show-hook 'org-show-entry))
+(with-eval-after-load 'org-agenda
+  (add-to-list 'org-agenda-after-show-hook 'org-show-entry))
 
-;;(advice-add 'org-refile :after (lambda (&rest _) (org-save-all-org-buffers)))
+(advice-add 'org-refile :after (lambda (&rest _) (org-save-all-org-buffers)))
 
 ;; Exclude DONE state tasks from refile targets
-;;(defun sanityinc/verify-refile-target ()
-;;  "Exclude todo keywords with a done state from refile targets."
-;;  (not (member (nth 2 (org-heading-components)) org-done-keywords)))
-;;(setq org-refile-target-verify-function 'sanityinc/verify-refile-target)
+(defun sanityinc/verify-refile-target ()
+  "Exclude todo keywords with a done state from refile targets."
+  (not (member (nth 2 (org-heading-components)) org-done-keywords)))
+(setq org-refile-target-verify-function 'sanityinc/verify-refile-target)
 
-;;(defun sanityinc/org-refile-anywhere (&optional goto default-buffer rfloc msg)
-;;  "A version of `org-refile' which allows refiling to any subtree."
-;;  (interactive "P")
-;;  (let ((org-refile-target-verify-function))
-;;    (org-refile goto default-buffer rfloc msg)))
-;;
-;;(defun sanityinc/org-agenda-refile-anywhere (&optional goto rfloc no-update)
-;;  "A version of `org-agenda-refile' which allows refiling to any subtree."
-;;  (interactive "P")
-;;  (let ((org-refile-target-verify-function))
-;;    (org-agenda-refile goto rfloc no-update)))
+(defun sanityinc/org-refile-anywhere (&optional goto default-buffer rfloc msg)
+  "A version of `org-refile' which allows refiling to any subtree."
+  (interactive "P")
+  (let ((org-refile-target-verify-function))
+    (org-refile goto default-buffer rfloc msg)))
+
+(defun sanityinc/org-agenda-refile-anywhere (&optional goto rfloc no-update)
+  "A version of `org-agenda-refile' which allows refiling to any subtree."
+  (interactive "P")
+  (let ((org-refile-target-verify-function))
+    (org-agenda-refile goto rfloc no-update)))
 
 ;; Targets start with the file name - allows creating level 1 tasks
 ;;(setq org-refile-use-outline-path (quote file))
-;;(setq org-refile-use-outline-path t)
-;;(setq org-outline-path-complete-in-steps nil)
+(setq org-refile-use-outline-path t)
+(setq org-outline-path-complete-in-steps nil)
 
 ;; Allow refile to create parent tasks with confirmation
-;;(setq org-refile-allow-creating-parent-nodes 'confirm)
+(setq org-refile-allow-creating-parent-nodes 'confirm)
 
+
+
 
 ;;; Org clock
 
 ;; Save the running clock and all clock history when exiting Emacs, load it on startup
-;;(with-eval-after-load 'org
-;;  (org-clock-persistence-insinuate))
-;;(setq org-clock-persist t)
-;;(setq org-clock-in-resume t)
-;;
+(with-eval-after-load 'org
+  (org-clock-persistence-insinuate))
+(setq org-clock-persist t)
+(setq org-clock-in-resume t)
+
 ;; Save clock data and notes in the LOGBOOK drawer
 (setq org-clock-into-drawer t)
 ;; Save state changes in the LOGBOOK drawer
@@ -103,20 +109,21 @@
       '(:hours "%d" :require-hours t :minutes ":%02d" :require-minutes t))
 
 ;; Show the clocked-in task - if any - in the header line
-;;(defun sanityinc/show-org-clock-in-header-line ()
-;;  (setq-default header-line-format '((" " org-mode-line-string " "))))
+(defun sanityinc/show-org-clock-in-header-line ()
+  (setq-default header-line-format '((" " org-mode-line-string " "))))
 
-;;(defun sanityinc/hide-org-clock-from-header-line ()
-;;  (setq-default header-line-format nil))
+(defun sanityinc/hide-org-clock-from-header-line ()
+  (setq-default header-line-format nil))
 
-;;(add-hook 'org-clock-in-hook 'sanityinc/show-org-clock-in-header-line)
-;;(add-hook 'org-clock-out-hook 'sanityinc/hide-org-clock-from-header-line)
-;;(add-hook 'org-clock-cancel-hook 'sanityinc/hide-org-clock-from-header-line)
+(add-hook 'org-clock-in-hook 'sanityinc/show-org-clock-in-header-line)
+(add-hook 'org-clock-out-hook 'sanityinc/hide-org-clock-from-header-line)
+(add-hook 'org-clock-cancel-hook 'sanityinc/hide-org-clock-from-header-line)
 
-;;(with-eval-after-load 'org-clock
-;;  (define-key org-clock-mode-line-map [header-line mouse-2] 'org-clock-goto)
-;;  (define-key org-clock-mode-line-map [header-line mouse-1] 'org-clock-menu))
-;;
+(with-eval-after-load 'org-clock
+  (define-key org-clock-mode-line-map [header-line mouse-2] 'org-clock-goto)
+  (define-key org-clock-mode-line-map [header-line mouse-1] 'org-clock-menu))
+
+
 
 ;;; Archiving
 
@@ -124,6 +131,8 @@
 (setq org-archive-location "%s_archive::* Archive")
 
 
+
+
 
 ;; (require-package 'org-pomodoro)
 ;; (setq org-pomodoro-keep-killed-pomodoro-time t)
@@ -134,30 +143,27 @@
   (define-key org-mode-map (kbd "C-M-<up>") 'org-up-element)
   )
 
-(add-hook 'text-mode-hook
-          'variable-pitch-mode)
-
 (with-eval-after-load 'org
   (org-babel-do-load-languages
    'org-babel-load-languages
    (seq-filter
     (lambda (pair)
       (locate-library (concat "ob-" (symbol-name (car pair)))))
-    '(;;(R . t)
+    '((R . t)
       ;; (ditaa . t)
       ;; (dot . t)
       (emacs-lisp . t)
       (elm . t)
-      ;;(gnuplot . t)
-      ;;(haskell . t)
+      (gnuplot . t)
+      (haskell . nil)
       ;; (latex . t)
       ;; (ledger . t)
       ;; (ocaml . nil)
       ;; (octave . t)
-      ;;(plantuml . t)
+      (plantuml . t)
       (python . t)
       ;; (ruby . t)
-      ;;(screen . nil)
+      (screen . nil)
       (sh . t) ;; obsolete
       (shell . t)
       (sql . t)
@@ -186,20 +192,19 @@
 
 (add-hook 'org-mode-hook 'whitespace-cleanup-mode)
 (add-hook 'org-mode-hook 'visual-line-mode)
+(defun jpk/org-mode-hook ()
+  (company-mode -1))
+(add-hook 'org-mode-hook 'jpk/org-mode-hook)
 
-;;(defun jpk/org-mode-hook ()
-;;  (company-mode -1))
-;;(add-hook 'org-mode-hook 'jpk/org-mode-hook)
+(defun rolo/quita-tachado ()
+  "Quitar el tachado del font face cuando completas algo en orgmode"
+  (interactive)
+  (set-face-attribute 'org-headline-done nil
+                      :strike-through nil
+                      :foreground "gray"))
 
-;;(defun rolo/quita-tachado ()
-;;  "Quitar el tachado del font face cuando completas algo en orgmode"
-;;  (interactive)
-;;  (set-face-attribute 'org-headline-done nil
-;;                      :strike-through nil
-;;                      :foreground "gray"))
-;;
-;;(with-eval-after-load 'org
-;;  (rolo/quita-tachado))
+(with-eval-after-load 'org
+  (rolo/quita-tachado))
 
 ;; (setq org-todo-keyword-faces
 ;;       (quote (("...." :inherit warning)
@@ -213,10 +218,10 @@
 
 ;; (require 'org-id)
 
-;;(use-package literate-calc-mode
-;;  :straight t
-;;  :defer t
-;;  )
+;; (use-package literate-calc-mode
+;;   :straight t
+;;   :defer t
+;;   )
 
 ;; Minimal UI with org-modern
 ;; (package-initialize)

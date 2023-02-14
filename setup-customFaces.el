@@ -7,45 +7,59 @@
 ;;  )
 
 ;; (set-cursor-color "#169100")
+(set-face-attribute 'default nil :family "Iosevka Fixed" :height 130)
+(set-face-attribute 'variable-pitch nil :family "Fira Sans Book" :height 1.0)
+(set-face-attribute 'fixed-pitch nil :family (face-attribute 'default :family))
+
+(use-package modus-themes
+  :straight t
+  ;; (modus-themes :type git
+  ;;               :host sourcehut
+  ;;               :repo "protesilaos/modus-themes"
+  ;;               ;; :branch "4.0.1"
+  ;;               );;:build (:not compile))
+  ;; :init
+  ;; (setq modus-themes-common-palette-overrides '(,@modus-themes-preset-overrides-intense))
+  :custom
+  (setq modus-themes-italic-constructs t
+        modus-themes-bold-constructs nil
+        modus-themes-org-blocks 'tinted-background
+        modus-themes-mixed-fonts t
+        line-spacing 0.15
+        modus-themes-paren-match '(bold intense)
+        )
+  (setq modus-themes-completions
+        '((matches . (extrabold background intense))
+          (selection . (semibold accented intense))
+          (popup . (accented))
+          ))
+  :config
+  (setq modus-themes-headings
+        '((0 . (fixed-pitch light 0.75))
+          (1 . (overline fixed-pitch bold 1.1))
+          (2 . (rainbow fixed-pitch semibold 1.1))
+          (3 . (rainbow fixed-pitch semibold 1.05))
+          (t . (monochrome fixed-pitch 1.05)))
+        )
+  (load-theme 'modus-vivendi)
+  :bind
+  ("<f5>" . modus-themes-toggle))
 
 ;; (straight-use-package 'modus-themes)
 
 ;; typeface
-(set-face-attribute 'default nil :family "Iosevka Fixed" :height 140)
-(set-face-attribute 'variable-pitch nil :family "Fira Sans Book" :height 0.96)
-(set-face-attribute 'fixed-pitch nil :family (face-attribute 'default :family))
 
-;; (setq modus-themes-italic-constructs t
-;;       modus-themes-bold-constructs nil
-;;       modus-themes-org-blocks 'tinted-background
-;;       modus-themes-mixed-fonts t
-;;       modus-themes-completions
-;;       '((matches . (extrabold background intense))
-;;         (selection . (semibold accented intense))
-;;         (popup . (accented))
-;;         )
-;;       modus-themes-headings
-;;       '((0 . (fixed-pitch light 0.75))
-;;         (1 . (overline fixed-pitch bold 1.2))
-;;         (2 . (rainbow fixed-pitch semibold 1.2))
-;;         (3 . (rainbow fixed-pitch semibold 1.1))
-;;         (t . (monochrome fixed-pitch 1.1)))
-;;       modus-themes-paren-match '(bold intense)
-;;       )
-
-;; line-spacing 0.15
 ;; modus-themes-region '(bg-only)
 ;; modus-themes-syntax '(green-strings)
 ;; modus-themes-tabs-accented t
 ;; modus-themes-fringes 'subtle
 
 
-;; Load the theme of your choice:
-;; (load-theme 'modus-vivendi)
+(add-hook 'text-mode-hook
+          'variable-pitch-mode)
 
-;; Optionally define a key to switch between Modus themes.  Also check
-;; the user option `modus-themes-to-toggle'.
-;; (define-key global-map (kbd "<f5>") #'modus-themes-toggle)
+;; (straight-use-package 'nimbus-theme)
+;; (load-theme 'nimbus t)
 
 
 (provide 'setup-customFaces)
