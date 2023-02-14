@@ -1,7 +1,7 @@
 (require 'denote)
 
 ;; Remember to check the doc strings of those variables.
-(setq denote-directory (expand-file-name "~/Documents/elemento/newkb/"))
+(setq denote-directory (expand-file-name "~/newkb/"))
 (setq denote-known-keywords '("emacs" "nav" "expresión" "oración" "dirección"))
 (setq denote-infer-keywords t)
 (setq denote-sort-keywords t)

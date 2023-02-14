@@ -5,8 +5,7 @@
 ;; * Uno
 
 (use-package outli
-  :load-path "~/purcell/site-lisp/straight/repos/outli"
-  ;; :after lispy ; only if you use lispy; it also sets speed keys on headers!
+  :straight (:host github :repo "jdtsmith/outli" :branch "main")
   :bind (:map outli-mode-map ; convenience key to get back to containing heading
               ("C-c C-p" . (lambda () (interactive) (outline-back-to-heading))))
   :hook ((prog-mode) . outli-mode)

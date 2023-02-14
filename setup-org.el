@@ -172,8 +172,8 @@
 
 
 (setq
- org-agenda-files '("~/Documents/elemento/newkb/" "~/Documents/elemento/newkb/daily/")
- org-directory "~/Documents/elemento/newkb/"
+ org-agenda-files '("~/newkb/" "~/newkb/daily/")
+ org-directory "~/newkb/"
  org-clock-into-drawer t
  org-startup-indented t
  ;; org-agenda-custom-commands '("p" "important tasks" tags "PRIORITY=\"A\"")
