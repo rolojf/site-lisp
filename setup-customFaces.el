@@ -7,9 +7,9 @@
 ;;  )
 
 ;; (set-cursor-color "#169100")
-(set-face-attribute 'default nil :family "Iosevka Fixed" :height 130)
-(set-face-attribute 'variable-pitch nil :family "Fira Sans Book" :height 1.0)
-(set-face-attribute 'fixed-pitch nil :family (face-attribute 'default :family))
+;; (set-face-attribute 'default nil :family "Iosevka Fixed" :height 130)
+;; (set-face-attribute 'variable-pitch nil :family "Fira Sans Book" :height 1.0)
+;; (set-face-attribute 'fixed-pitch nil :family (face-attribute 'default :family))
 
 (use-package modus-themes
   :straight t
@@ -24,7 +24,7 @@
   (setq modus-themes-italic-constructs t
         modus-themes-bold-constructs nil
         modus-themes-org-blocks 'tinted-background
-        modus-themes-mixed-fonts t
+        ;; modus-themes-mixed-fonts t
         line-spacing 0.15
         modus-themes-paren-match '(bold intense)
         )
@@ -34,13 +34,13 @@
           (popup . (accented))
           ))
   :config
-  (setq modus-themes-headings
-        '((0 . (fixed-pitch light 0.75))
-          (1 . (overline fixed-pitch bold 1.1))
-          (2 . (rainbow fixed-pitch semibold 1.1))
-          (3 . (rainbow fixed-pitch semibold 1.05))
-          (t . (monochrome fixed-pitch 1.05)))
-        )
+  ;; (setq modus-themes-headings
+  ;;       '((0 . (fixed-pitch light 0.75))
+  ;;         (1 . (overline fixed-pitch bold 1.1))
+  ;;         (2 . (rainbow fixed-pitch semibold 1.1))
+  ;;         (3 . (rainbow fixed-pitch semibold 1.05))
+  ;;         (t . (monochrome fixed-pitch 1.05)))
+  ;;       )
   (load-theme 'modus-vivendi)
   :bind
   ("<f5>" . modus-themes-toggle))
