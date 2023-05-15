@@ -25,6 +25,7 @@
        org-html-validation-link nil
        org-export-kill-product-buffer-when-displayed t
        org-hide-emphasis-markers t
+       org-export-with-toc nil
        )
 
 ;; Re-align tags when window shape changes
