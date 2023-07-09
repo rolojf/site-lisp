@@ -20,7 +20,8 @@
   ;;               );;:build (:not compile))
   ;; :init
   ;; (setq modus-themes-common-palette-overrides '(,@modus-themes-preset-overrides-intense))
-  :custom
+  :config
+  (load-theme 'modus-vivendi)
   (setq modus-themes-italic-constructs t
         modus-themes-bold-constructs nil
         modus-themes-org-blocks 'tinted-background
@@ -33,7 +34,6 @@
           (selection . (semibold accented intense))
           (popup . (accented))
           ))
-  :config
   (setq modus-themes-headings
         '((0 . (fixed-pitch light 0.75))
           (1 . (overline fixed-pitch bold 1.1))
@@ -41,7 +41,6 @@
           (3 . (rainbow fixed-pitch semibold 1.05))
           (t . (monochrome fixed-pitch 1.05)))
         )
-  (load-theme 'modus-vivendi)
   :bind
   ("<f5>" . modus-themes-toggle))
 
