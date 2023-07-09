@@ -14,7 +14,7 @@
 (require 'setup-elmLS)
 ;;(require 'setup-outshine)
 (require 'setup-outli)
-(require 'setup-copilot)
+;;(require 'setup-copilot)
 ;; (require 'setup-vterm)
 ;;(require  'dired+)
 ;; (require 'setup-roam)
