@@ -2,6 +2,13 @@
   :straight (:host github :repo "zerolfx/copilot.el" :files ("dist" "*.el"))
   :ensure t
   :hook (prog-mode . copilot-mode)
+  :chords (
+           ("wk" . copilot-next-completion)
+           ("wi" . copilot-previous-completion)
+           ("wj" . copilot-accept-completion-by-word)
+           ("wm" .  copilot-accept-completion-by-line)
+           )
+
   )
 
 ;; de la página: https://robert.kra.hn/posts/2023-02-22-copilot-emacs-setup/
@@ -51,7 +58,26 @@ cleared, make sure the overlay doesn't come back too soon."
   ;; disable inline previews
   (delq 'company-preview-if-just-one-frontend company-frontends))
 
-(define-key copilot-completion-map (kbd "<f1>") 'copilot-accept-completion)
+;; reset <f1> globally
+(global-set-key (kbd "<f1>") nil)
+
+;; set copilot keybindings
+
+(defun rk/copilot-complete-or-accept ()
+  "Command that either triggers a completion or accepts one if one
+is available. Useful if you tend to hammer your keys like I do."
+  (interactive)
+  (if (copilot--overlay-visible)
+      (progn
+        (copilot-accept-completion)
+        (open-line 1)
+        (next-line))
+    (copilot-complete)))
+
+
+(define-key global-map (kbd "<f1>") #'rk/copilot-complete-or-accept)
+
+
 
 
 ;; you can utilize :map :hook and :config to customize copilot
