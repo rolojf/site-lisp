@@ -173,7 +173,11 @@
 
 
 (setq
- org-agenda-files '("~/Documents/elemento/newkb/" "~/Documents/elemento/newkb/daily/")
+ org-agenda-files '("~/Dropbox/20220728T144545--todo__pend.org"
+                    "~/Documents/elemento/newkb/20220726T124858--plataforma-de-publicación__pend.org"
+                    "~/Documents/elemento/newkb/20221114T113715--desarrollarme-en-sistemas__pend_iniciativa.org"
+                    "~/Documents/elemento/newkb/20220718T113752--pers__dirección_pend.org"
+                    )
  org-directory "~/Documents/elemento/newkb/"
  org-clock-into-drawer t
  org-startup-indented t
