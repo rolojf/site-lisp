@@ -145,6 +145,10 @@
   )
 
 (with-eval-after-load 'org
+  (define-key org-mode-map (kbd "C-c C-.") 'org-timestamp-inactive)
+  )
+
+(with-eval-after-load 'org
   (org-babel-do-load-languages
    'org-babel-load-languages
    (seq-filter
