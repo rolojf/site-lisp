@@ -111,25 +111,18 @@
    (denote--title-prompt)
    '("journal")))
 
-(defun rolo-denote-split-org-subtree ()
-  "Create new Denote note as an Org file using current Org subtree."
-  (interactive)
-  (let ((text (org-get-entry))
-        (heading (org-get-heading :no-tags :no-todo :no-priority :no-comment))
-        (tags (org-get-tags)))
-    (delete-region (org-entry-beginning-position) (org-entry-end-position))
-    (denote heading tags 'org)
-    (insert text)))
 
+
+;; agregando lo de journal
+(require 'denote-journal-extras)
+(setq denote-journal-extras-directory nil)
+(setq denote-journal-extras-title-format nil)
 ;; Denote DOES NOT define any key bindings.  This is for the user to
 ;; decide.  For example:
 (let ((map global-map))
   ;; our custom command
-  (define-key map (kbd "C-c n j") #'rolo-denote-journal)
-  (define-key map (kbd "C-c n o") #'rolo-denote-split-org-subtree)
+  (define-key map (kbd "C-c n j") #'denote-journal-extras-new-entry)
   )
-
-
 
 (provide 'setup-denote)
 ;;; setup-denote.el ends here
