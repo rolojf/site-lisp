@@ -201,9 +201,9 @@
 
 (add-hook 'org-mode-hook 'whitespace-cleanup-mode)
 (add-hook 'org-mode-hook 'visual-line-mode)
-(defun jpk/org-mode-hook ()
-  (company-mode -1))
-(add-hook 'org-mode-hook 'jpk/org-mode-hook)
+;; (defun jpk/org-mode-hook ()
+;;   (company-mode -1))
+;; (add-hook 'org-mode-hook 'jpk/org-mode-hook)
 
 (defun rolo/quita-tachado ()
   "Quitar el tachado del font face cuando completas algo en orgmode"
