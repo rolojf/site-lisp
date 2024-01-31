@@ -40,5 +40,7 @@
   (add-hook 'elm-mode-hook 'outli-mode)
   )
 
+(require 'roc-mode)
+
 (provide 'setup-elmLS)
 ;;; setup-elmLS.el ends here.
