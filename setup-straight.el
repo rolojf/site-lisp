@@ -13,7 +13,7 @@
       (eval-print-last-sexp)))
   (load bootstrap-file nil 'nomessage))
 
-(straight-use-package 'org)
+;; (straight-use-package 'org)
 (straight-use-package 'use-package)
 ;; (straight-use-package 'hydra)
 ;; (straight-use-package 'denote)
