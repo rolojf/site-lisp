@@ -25,6 +25,7 @@
 ;; (require 'setup-roam2)
 ;; (require 'setup-howm)
 (require 'setup-denote)
+(require 'setup-gptel)
 ;; (require 'setup-pass)
 ;; (require 'setup-origami)
 ;; (require 'setup-atomic)
