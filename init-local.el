@@ -68,4 +68,8 @@
 ;;   (sanityinc/open-line-with-reindent n)
 ;;   )
 
+(prefer-coding-system 'utf-8-unix)
+(setq coding-system-for-read 'utf-8-unix)
+(setq coding-system-for-write 'utf-8-unix)
+
 (provide 'init-local)
