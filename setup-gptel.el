@@ -36,8 +36,9 @@
   (gptel-make-gemini "Gemini"
     :key (getenv "gemini")
     :stream t)
+  ;; pandoc -f gfm -t org|sed '/:PROPERTIES:/,/:END:/d'
 
-  ;; ;; pandoc -f gfm -t org|sed '/:PROPERTIES:/,/:END:/d'
+  ;; ;; From https://github.com/gregoryg/emacs-gregoryg para convertir automáticamente markdown to orgmode with pandoc
   ;; (defun gjg/gptel--convert-markdown->org (str)
   ;;   "Convert string STR from markdown to org markup using Pandoc.
   ;; Remove the property drawers Pandoc insists on inserting for org output."
@@ -46,8 +47,8 @@
   ;;   (interactive)
   ;;   (let* ((org-prefix (alist-get 'org-mode gptel-prompt-prefix-alist))
   ;;          (shift-indent (progn (string-match "^\\(\\*+\\)" org-prefix) (length (match-string 1 org-prefix))))
-  ;;          (lua-filter (when (file-readable-p "~/.config/pandoc/gfm_code_to_org_block.lua")
-  ;;                        (concat "--lua-filter=" (expand-file-name "~/.config/pandoc/gfm_code_to_org_block.lua"))))
+  ;;          ;; (lua-filter (when (file-readable-p "~/.config/pandoc/gfm_code_to_org_block.lua")
+  ;;          ;;               (concat "--lua-filter=" (expand-file-name "~/.config/pandoc/gfm_code_to_org_block.lua"))))
   ;;          (temp-name (make-temp-name "gptel-convert-" ))
   ;;          (sentence-end "\\([.?!
   ;; ]\\)"))
@@ -57,26 +58,29 @@
   ;;       (insert str)
   ;;       (write-region (point-min) (point-max) (concat "/tmp/" temp-name ".md" ))
   ;;       (shell-command-on-region (point-min) (point-max)
-  ;;                                (format "pandoc -f gfm -t org --shift-heading-level-by=%d %s|sed '/:PROPERTIES:/,/:END:/d'" shift-indent lua-filter)
+  ;;                                (format "pandoc -f gfm -t org --shift-heading-level-by=%d %s|sed '/:PROPERTIES:/,/:END:/d'" shift-indent) ;; lua-filter
   ;;                                nil ;; use current buffer
   ;;                                t   ;; replace the buffer contents
   ;;                                "*gptel-convert-error*")
   ;;       (goto-char (point-min))
-  ;;       (insert (format "%sAssistant: %s\n" (alist-get 'org-mode gptel-prompt-prefix-alist) (or (sentence-at-point t) "[resp]")))
+  ;;       ;; (insert (format "%sAssistant: %s\n" (alist-get 'org-mode gptel-prompt-prefix-alist) (or (sentence-at-point t) "[resp]")))
+  ;;       (insert (format "%sAssistant: \n" (alist-get 'org-mode gptel-prompt-prefix-alist)))
+  ;;       ;; (insert "\n")
   ;;       (goto-char (point-max))
   ;;       (buffer-string))))
 
   ;; (defun gjg/gptel-convert-org-with-pandoc (content buffer)
   ;;   "Transform CONTENT acoording to required major-mode using `pandoc'.
-  ;; Currenly only `org-mode' is supported
-  ;; This depends on the `pandoc' binary only, not on the  Emacs Lisp `pandoc' package."
+  ;;  Currenly only `org-mode' is supported
+  ;;  This depends on the `pandoc' binary only, not on the  Emacs Lisp `pandoc' package."
   ;;   (pcase (buffer-local-value 'major-mode buffer)
   ;;     ('org-mode (gjg/gptel--convert-markdown->org content))
   ;;     (_ content)))
 
   ;; (custom-set-variables '(gptel-response-filter-functions
   ;;                         '(gjg/gptel-convert-org-with-pandoc)))
-  ;; ;; (defun my/gptel-send (&optional arg)
+
+  ;; (defun my/gptel-send (&optional arg)
   ;; (interactive "P")
   ;; (if (or gptel-mode (< (point) 2000) (use-region-p))
   ;; (gptel-send arg)
