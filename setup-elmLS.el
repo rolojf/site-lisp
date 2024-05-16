@@ -29,9 +29,9 @@
               )
   :config
   (setq elm-mode-hook '(origami-mode )) ;;toggle-truncate-lines
-  (setq elm-tags-on-save t)
+  ;; (setq elm-tags-on-save t)
   (setq elm-tags-exclude-elm-stuff nil)
-
+  (defun jsonrpc--log-event (connection message &optional type))
   (add-hook 'elm-mode-hook
             (lambda ()
               (eglot-ensure)
