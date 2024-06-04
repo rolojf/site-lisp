@@ -2,6 +2,7 @@
 ;;; Commentary:
 
 ;;; Code:
+;; (use-package 'org)
 
 (maybe-require-package 'org-cliplink)
 
@@ -177,8 +178,8 @@
 
 
 (setq
- org-agenda-files '("~/Dropbox/20220728T144545--todo__pend.org"
-                    "~/Documents/elemento/newkb/20220726T124858--plataforma-de-publicación__pend.org"
+ org-agenda-files '("~/Documents/elemento/newkb/20220726T124858--plataforma-de-publicación__pend.org"
+                    "~/Documents/elemento/newkb/20220728T144545--todo__pend.org"
                     "~/Documents/elemento/newkb/20221114T113715--desarrollarme-en-sistemas__pend_iniciativa.org"
                     "~/Documents/elemento/newkb/20220718T113752--pers__dirección_pend.org"
                     )
@@ -224,13 +225,10 @@
 
 ;; (require 'org-id)
 
-;; (use-package literate-calc-mode
-;;   :straight t
-;;   :defer t
-;;   )
-
-;; Minimal UI with org-modern
-;; (package-initialize)
+(use-package literate-calc-mode
+  :ensure t
+  :defer t
+  )
 
 (tool-bar-mode -1)
 ;; (scroll-bar-mode -1)

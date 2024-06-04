@@ -31,13 +31,16 @@
   (setq elm-mode-hook '(origami-mode )) ;;toggle-truncate-lines
   (setq elm-tags-on-save t)
   (setq elm-tags-exclude-elm-stuff nil)
-
+  ;; (defun jsonrpc--log-event (connection message &optional type))
+  (fset #'jsonrpc--log-event #'ignore)
+  (setq eglot-events-buffer-size 0)
   (add-hook 'elm-mode-hook
             (lambda ()
               (eglot-ensure)
               (elm-format-on-save-mode)
               ))
   (add-hook 'elm-mode-hook 'outli-mode)
+  (maybe-require-package 'elm-test-runner)
   )
 
 (require 'roc-mode)

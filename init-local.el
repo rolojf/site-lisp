@@ -2,7 +2,7 @@
 ;; use-package
 ;;; (eval-when-compile (require 'use-package))
 (setq use-package-enable-imenu-support t) ;; add imenu support for use-package declarations
-(add-to-list 'package-archives '("org" . "https://elpa.nongnu.org/nongnu/") t)
+;; (add-to-list 'package-archives '("org" . "https://elpa.nongnu.org/nongnu/") t)
 ;;
 (require  'setup-chords)
 (require  'setup-dired)
