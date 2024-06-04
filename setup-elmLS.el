@@ -29,7 +29,7 @@
               )
   :config
   (setq elm-mode-hook '(origami-mode )) ;;toggle-truncate-lines
-  (setq elm-tags-on-save t)
+  ;; (setq elm-tags-on-save t)
   (setq elm-tags-exclude-elm-stuff nil)
   ;; (defun jsonrpc--log-event (connection message &optional type))
   (fset #'jsonrpc--log-event #'ignore)
@@ -38,9 +38,16 @@
             (lambda ()
               (eglot-ensure)
               (elm-format-on-save-mode)
+              (flycheck-mode nil)
+              (flymake-mode nil)
               ))
   (add-hook 'elm-mode-hook 'outli-mode)
   (maybe-require-package 'elm-test-runner)
+  )
+
+(use-package eglot-booster
+  :straight '(eglot-booster :type git :host github :repo "jdtsmith/eglot-booster")
+  :after eglot
   )
 
 (require 'roc-mode)
