@@ -36,8 +36,15 @@
             (lambda ()
               (eglot-ensure)
               (elm-format-on-save-mode)
+              (flycheck-mode nil)
+              (flymake-mode nil)
               ))
   (add-hook 'elm-mode-hook 'outli-mode)
+  )
+
+(use-package eglot-booster
+  :straight '(eglot-booster :type git :host github :repo "jdtsmith/eglot-booster")
+  :after eglot
   )
 
 (require 'roc-mode)
