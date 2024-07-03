@@ -1,6 +1,5 @@
-;;; Sacado de lo mío y de init-org.el --- Org-mode config -*- lexical-binding: t -*-
-;;; Commentary:
-
+;;; setup-org.el --- Insert description here -*- lexical-binding: t -*-
+;;; Commentary: Sacado de lo mío y de init-org.el
 ;;; Code:
 ;; (use-package 'org)
 
@@ -282,3 +281,4 @@
 
 
 (provide 'setup-org)
+;;; setup-org.el ends here
