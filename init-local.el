@@ -15,6 +15,7 @@
 ;;(require 'setup-outshine)
 (require 'setup-outli)
 (require 'setup-nushell)
+(require 'setup-gren)
 ;; (require 'setup-asistant)
 ;; (require 'setup-gptel)
 ;; (require 'setup-org-ai)
