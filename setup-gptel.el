@@ -3,6 +3,7 @@
 ;;; Code:
 
 (use-package gptel
+  :straight t
   :commands (gptel gptel-send)
   :hook (gptel-mode . visual-fill-column-mode)
   :bind (("C-c <return>" . gptel-send)         )
@@ -22,8 +23,8 @@
         )
 
   (gptel-make-gemini "Gemini"
-    :key (getenv "gemini")
-    :stream t)
+                     :key (getenv "gemini")
+                     :stream t)
   )
 
 (provide 'setup-gptel)
