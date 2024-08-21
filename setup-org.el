@@ -154,18 +154,19 @@
    (seq-filter
     (lambda (pair)
       (locate-library (concat "ob-" (symbol-name (car pair)))))
-    '((R . t)
+    '(;; (R . t)
       ;; (ditaa . t)
       ;; (dot . t)
       (emacs-lisp . t)
       (elm . t)
       (gnuplot . t)
-      (haskell . nil)
+      ;; (haskell . nil)
       ;; (latex . t)
       ;; (ledger . t)
+      (mermaid . t)
       ;; (ocaml . nil)
       ;; (octave . t)
-      (plantuml . t)
+      ;; (plantuml . t)
       (python . t)
       ;; (ruby . t)
       (screen . nil)
@@ -229,55 +230,13 @@
   :defer t
   )
 
+(use-package ob-mermaid
+  :ensure t
+  :config (setq ob-mermaid-cli-path "/usr/bin/mmdc")
+  )
+
+
 (tool-bar-mode -1)
-;; (scroll-bar-mode -1)
-
-;; Add frame borders and window dividers
-;; (modify-all-frames-parameters
-;;  '((right-divider-width . 40)
-;;    (internal-border-width . 40)))
-;; (dolist (face '(window-divider
-;;                 window-divider-first-pixel
-;;                 window-divider-last-pixel))
-;;   (face-spec-reset-face face)
-;;   (set-face-foreground face (face-attribute 'default :background)))
-;; (set-face-background 'fringe (face-attribute 'default :background))
-
-;; (setq
-;; Edit settings
-;; org-auto-align-tags nil
-;; org-tags-column 0
-;; org-catch-invisible-edits 'show-and-error
-;; org-insert-heading-respect-content t
-
-;; Org styling, hide markup etc.
-;;
-;; org-pretty-entities t
-;; org-ellipsis "…"
-;; Agenda styling
-;; org-agenda-block-separator ?─
-;; org-agenda-time-grid
-;; '((daily today require-timed)
-;; (800 1000 1200 1400 1600 1800 2000)
-;; " ┄┄┄┄┄ " "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
-;; org-agenda-current-time-string
-;; "⭠ now ─────────────────────────────────────────────────"
-;; org-modern-todo-faces
-;; '(
-;; ("...."
-;; :background "khaki3"
-;; :foreground "DeepPink")
-;; ("SDM"
-;; :background "CadetBlue"
-;; :foreground "yellow1")
-;; ("COMP"
-;; :background "MediumTurquoise"
-;; :foreground "black")
-;; ("TODO"
-;; :background "gold"
-;; :foreground "navy")
-;; )
-;; )
 
 
 (provide 'setup-org)
