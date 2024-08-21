@@ -50,7 +50,7 @@
   :after eglot
   )
 
-(require 'roc-mode)
+;; (require 'roc-mode)
 
 (provide 'setup-elmLS)
 ;;; setup-elmLS.el ends here.
