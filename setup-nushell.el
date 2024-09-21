@@ -12,6 +12,8 @@
 ;;     (electric-indent-local-mode 1))
 ;;   (add-hook 'nushell-ts-mode-hook 'hfj/nushell/mode-hook))
 
-(require 'nushell-mode)
+(use-package nushell-mode
+  :ensure t
+  )
 (provide 'setup-nushell)
 ;;; setup-nushell.el ends here
