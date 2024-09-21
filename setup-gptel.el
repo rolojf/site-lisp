@@ -3,7 +3,7 @@
 ;;; Code:
 
 (use-package gptel
-  :straight t
+  :ensure t
   :commands (gptel gptel-send)
   :hook (gptel-mode . visual-fill-column-mode)
   :bind (("C-c <return>" . gptel-send)         )
