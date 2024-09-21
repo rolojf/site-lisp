@@ -2,11 +2,14 @@
 ;;; Commentary: solo cambién líneas 8 y 9 y de la 105 en adelante
 ;;; Code: del manual oficial de prot
 
-(require 'denote)
+(use-package denote
+  :ensure t
+  )
 
 ;; Remember to check the doc strings of those variables.
 (setq denote-directory (expand-file-name "~/Documents/elemento/newkb/"))
 (setq denote-id-format "%Y%m%dT%H%M")
+(setq denote-id-regexp "\\([0-9]\\{8\\}\\)\\(T[0-9]\\{4\\}\\)")
 ;; (setq denote-id-regexp "\\([0-9]\\{8\\}\\)\\(T[0-9]\\{4\\}\\)")
 (setq denote-known-keywords '("emacs" "nav" "expresión" "oración" "dirección"))
 (setq denote-infer-keywords t)
@@ -19,7 +22,11 @@
 
 ;; Pick dates, where relevant, with Org's advanced interface:
 (setq denote-date-prompt-use-org-read-date t)
-(consult-denote-mode)
+(use-package consult-denote
+  :ensure t
+  :config
+  (consult-denote-mode)
+  )
 
 (setq denote-date-format nil) ; read doc string
 
