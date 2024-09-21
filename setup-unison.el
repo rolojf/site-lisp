@@ -3,12 +3,18 @@
 ;;; Code:
 
 (use-package unison-ts-mode
-  :defer t
+
   :straight (:type git :host github :repo "fmguerreiro/unison-ts-mode")
   :init
   (add-to-list 'treesit-language-source-alist '(unison "https://github.com/kylegoetz/tree-sitter-unison"))
   :config
-  (add-to-list 'eglot-server-programs '(unison-ts-mode . ("127.0.0.1" 5757)))
+  (eval-after-load "eglot"
+    '(progn
+       (add-to-list 'eglot-server-programs
+                    '(unison-ts-mode . ("127.0.0.1" 5757))
+                    )
+       ;; ... more code ...
+       ))
   (add-hook 'unison-ts-mode-hook 'eglot-ensure)
   )
 
