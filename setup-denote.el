@@ -25,7 +25,9 @@
 (use-package consult-denote
   :ensure t
   :config
-  (consult-denote-mode)
+  (define-key global-map (kbd "C-c n f") #'consult-denote-find)
+  (define-key global-map (kbd "C-c n g") #'consult-denote-grep)
+  (consult-denote-mode 1)
   )
 
 (setq denote-date-format nil) ; read doc string
