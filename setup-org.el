@@ -178,10 +178,7 @@
 
 
 (setq
- org-agenda-files '("~/Documents/elemento/newkb/20220726T124858--plataforma-de-publicación__pend.org"
-                    "~/Documents/elemento/newkb/20220728T144545--todo__pend.org"
-                    "~/Documents/elemento/newkb/20221114T113715--desarrollarme-en-sistemas__pend_iniciativa.org"
-                    "~/Documents/elemento/newkb/20220718T113752--pers__dirección_pend.org"
+ org-agenda-files '("~/Documents/elemento/newkb/20240917T0952--inbox__pend.org"
                     )
  org-directory "~/Documents/elemento/newkb/"
  org-clock-into-drawer t
@@ -191,14 +188,15 @@
  ;; org-plantuml-jar-path "/usr/share/java/plantuml/plantuml.jar"
  org-html-doctype "html5"
  org-html-html5-fancy t
- ;; org-log-done 'time
+ org-log-done 'time
  org-tags-column 65
- org-todo-keywords
- (quote ((sequence "TODO(t)" "....(.)" "|" "DONE(d)")
-         (sequence "PROY(p)" "SDM(s)" "!!!!(n)" "|"  "COMP(c)" "KILL(k)")
-         ))
- org-todo-repeat-to-state "TODO"
- )
+ org-refile-targets `((nil :regexp . ,(rx-to-string `(seq line-start
+                                                          "** Terminados"
+                                                          ))))
+ org-todo-keywords  (quote ((sequence "TODO(t)" "....(.)" "|" "DONE(d)" "KILL(k)")
+                            (sequence "PROY(p)" "WAIT(w)" "|"  "COMP(c)" "SDM(s)")
+                            ))
+ org-todo-repeat-to-state "TODO")
 
 (add-hook 'org-mode-hook 'whitespace-cleanup-mode)
 (add-hook 'org-mode-hook 'visual-line-mode)
@@ -232,7 +230,7 @@
 
 (use-package ob-mermaid
   :ensure t
-  :config (setq ob-mermaid-cli-path "/usr/bin/mmdc")
+  :config (setq ob-mermaid-cli-path "/home/a1rolo/.npm-global/bin/mmdc")
   )
 
 

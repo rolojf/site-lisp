@@ -29,7 +29,6 @@
 ;; (require 'setup-howm)
 (require 'setup-denote)
 (require 'setup-gptel)
-(require 'setup-casual-calc)
 ;; (require 'setup-pass)
 ;; (require 'setup-origami)
 ;; (require 'setup-atomic)

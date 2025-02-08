@@ -14,7 +14,7 @@
 
 
 (use-package elm-mode
-  :straight t
+  :ensure t
   :defer t
   :chords (
            ("wr" . eglot-rename)

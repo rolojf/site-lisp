@@ -16,7 +16,7 @@
 (straight-use-package 'use-package)
 ;; (straight-use-package 'hydra)
 ;; (straight-use-package 'denote)
-(straight-use-package '(roc-mode :type git :host gitlab :repo "tad-lispy/roc-mode"))
+;; (straight-use-package '(roc-mode :type git :host gitlab :repo "tad-lispy/roc-mode"))
 ;; (straight-use-package 'vterm)
 ;; (straight-use-package 'org-modern)
 
