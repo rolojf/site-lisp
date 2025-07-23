@@ -12,7 +12,7 @@
     (org-fold-hide-block-all)
     )
   )
-
+(define-key org-mode-map (kbd "C-c }") 'rolo-procesa-think)
 (use-package gptel
   :ensure t
   :commands (gptel gptel-send)
@@ -21,9 +21,9 @@
   :config
   (setq gptel-api-key (getenv "oaiskey")
         gptel-default-mode 'org-mode
-        gptel-model 'gpt-4o
+        gptel-model 'o3-mini
         gptel-org-branching-context 't
-        gptel-post-response-hook 'rolo-procesa-think)
+        )
   (setf (alist-get 'org-mode gptel-prompt-prefix-alist) "@user\n")
   (setf (alist-get 'org-mode gptel-response-prefix-alist) "@assistant\n")
   (setq gptel-directives '(

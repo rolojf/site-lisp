@@ -7,8 +7,8 @@
 ;;  )
 
 ;; (set-cursor-color "#169100")
-(set-face-attribute 'default nil :family "Iosevka Fixed" :height 160)
-(set-face-attribute 'variable-pitch nil :family "Fira Sans Book" :height 1.0)
+(set-face-attribute 'default nil :family "Iosevka SS05" :height 175)
+(set-face-attribute 'variable-pitch nil :family "Roboto Light" :height 1.0)
 (set-face-attribute 'fixed-pitch nil :family (face-attribute 'default :family))
 
 (use-package modus-themes

@@ -1,3 +1,7 @@
+;;; setup-spelling.el --- Insert description here -*- lexical-binding: t -*-
+;;; Commentary:
+;;; Code:
+
 (setenv "LANG" "es_MX, en_US")
 ;; Activate Hunspell
 ;;
@@ -39,3 +43,5 @@
 (global-set-key (kbd "<f8>")   'fd-switch-dictionary)
 
 (provide 'setup-spelling)
+
+;;; setup-spelling.el ends here

@@ -29,6 +29,7 @@
 ;; (require 'setup-howm)
 (require 'setup-denote)
 (require 'setup-gptel)
+(require 'setup-gleam)
 ;; (require 'setup-pass)
 ;; (require 'setup-origami)
 ;; (require 'setup-atomic)

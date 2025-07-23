@@ -188,32 +188,34 @@
  ;; org-plantuml-jar-path "/usr/share/java/plantuml/plantuml.jar"
  org-html-doctype "html5"
  org-html-html5-fancy t
- org-log-done 'time
+ org-log-done nil
  org-tags-column 65
  org-refile-targets `((nil :regexp . ,(rx-to-string `(seq line-start
                                                           "** Terminados"
                                                           ))))
- org-todo-keywords  (quote ((sequence "TODO(t)" "....(.)" "|" "DONE(d)" "KILL(k)")
-                            (sequence "PROY(p)" "WAIT(w)" "|"  "COMP(c)" "SDM(s)")
+ org-todo-keywords  (quote ((sequence "TODO(t)" "WAIT(w)" "|" "DONE(d)" "KILL(k)")
+                            ;; (sequence "PROY(p)" "WAIT(w)" "|"  "COMP(c)" "SDM(s)")
                             ))
  org-todo-repeat-to-state "TODO")
 
 (add-hook 'org-mode-hook 'whitespace-cleanup-mode)
 (add-hook 'org-mode-hook 'visual-line-mode)
 
-(defun rolo/quita-tachado ()
-  "Quitar el tachado del font face cuando completas algo en orgmode"
-  (interactive)
-  (set-face-attribute 'org-headline-done nil
-                      :strike-through nil
-                      :foreground "gray"))
+;; (defun rolo/quita-tachado ()
+;;   "Quitar el tachado del font face cuando completas algo en orgmode"
+;;   (interactive)
+;;   (set-face-attribute 'org-headline-done nil
+;;                       :strike-through nil
+;;                       :foreground "gray"))
 
-(with-eval-after-load 'org
-  (rolo/quita-tachado))
+;; (with-eval-after-load 'org
+;;   (rolo/quita-tachado))
 
-;; (setq org-todo-keyword-faces
-;;       (quote (("...." :inherit warning)
-;;               ("PROY" :inherit font-lock-string-face))))
+(setq org-todo-keyword-faces
+      (quote (("WAIT" :foreground "blue")
+              )
+             )
+      )
 
 ;; (use-package ox-hugo
 ;;   :straight t          ;Auto-install the package from Melpa (optional)
@@ -221,7 +223,11 @@
 
 ;;(require 'ox-slimhtml)
 
-;; (require 'org-id)
+(require 'org-id)
+(setq  org-id-method 'ts)
+(setq org-id-link-to-org-use-id 't)
+(setq org-id-ts-format "%Y%m%dT%H%M%S")
+
 
 (use-package literate-calc-mode
   :ensure t
