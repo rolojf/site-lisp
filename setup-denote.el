@@ -1,92 +1,81 @@
-;;; setup-denote.el --- Insert description here -*- lexical-binding: t -*-
-;;; Commentary: solo cambién líneas 8 y 9 y de la 105 en adelante
-;;; Code: del manual oficial de prot
+;;; setup-denote.el --- Denote configuration with custom journaling -*- lexical-binding: t -*-
+
+;;; Commentary:
+;;; This file configures denote.el and adds a custom journaling workflow.
+;;; The workflow automatically moves unfinished tasks from the previous day's
+;;; journal to the current one and integrates recent journals with Org Agenda.
+;;; Journals are stored in the "diario" subdirectory.
+
+;;; Code:
 
 (use-package denote
   :ensure t
-  )
+  :hook
+  ;; Apply colours to Denote names in Dired.
+  ((dired-mode . denote-dired-mode))
+  :bind
+  ;; Standard Denote key bindings.
+  ( :map global-map
+    ("C-c n n" . denote)
+    ("C-c n d" . denote-dired)
+    ;; We will override C-c n g later with consult-denote.
+    ("C-c n l" . denote-link)
+    ("C-c n L" . denote-add-links)
+    ("C-c n b" . denote-backlinks)
+    ("C-c n q c" . denote-query-contents-link)
+    ("C-c n q f" . denote-query-filenames-link)
+    ("C-c n r" . denote-rename-file)
+    ("C-c n R" . denote-rename-file-using-front-matter)
 
-;; Remember to check the doc strings of those variables.
-(setq denote-directory (expand-file-name "~/Documents/elemento/newkb/"))
-(setq denote-id-format "%Y%m%dT%H%M")
-(setq denote-id-regexp "\\([0-9]\\{8\\}\\)\\(T[0-9]\\{4\\}\\)")
-;; (setq denote-id-regexp "\\([0-9]\\{8\\}\\)\\(T[0-9]\\{4\\}\\)")
-(setq denote-known-keywords '("emacs" "nav" "expresión" "oración" "dirección"))
-(setq denote-infer-keywords t)
-(setq denote-sort-keywords t)
-(setq denote-file-type nil) ; Org is the default, set others here
-(setq denote-prompts '(title keywords))
-(setq denote-excluded-directories-regexp nil)
-(setq denote-excluded-keywords-regexp nil)
-(setq denote-rename-confirmations '(rewrite-front-matter modify-file-name))
+    ;; Key bindings specifically for Dired.
+    :map dired-mode-map
+    ("C-c C-d C-i" . denote-dired-link-marked-notes)
+    ("C-c C-d C-r" . denote-dired-rename-files)
+    ("C-c C-d C-k" . denote-dired-rename-marked-files-with-keywords)
+    ("C-c C-d C-R" . denote-dired-rename-marked-files-using-front-matter))
 
-;; Pick dates, where relevant, with Org's advanced interface:
-(setq denote-date-prompt-use-org-read-date t)
+  :config
+  ;; The variables `denote-directory` and `denote-journal-directory` are
+  ;; now defined globally below to avoid load-order errors.
+
+  ;; Configuration for file naming and metadata.
+  ;; WARNING: Removing %S from the format may lead to non-unique
+  ;; identifiers if you create more than one note in the same minute.
+  (setq denote-id-format "%Y%m%dT%H%M")
+  (setq denote-id-regexp "\\([0-9]\\{8\\}\\)\\(T[0-9]\\{4\\}\\)")
+  (setq denote-save-buffers nil)
+  (setq denote-infer-keywords t)
+  (setq denote-sort-keywords t)
+  (setq denote-prompts '(title keywords))
+  (setq denote-file-type nil) ; Org is the default.
+  (setq denote-date-prompt-use-org-read-date t)
+  (denote-rename-buffer-mode 1))
+
 (use-package consult-denote
   :ensure t
+  :after denote
   :config
+  ;; Bind consult-denote commands.
   (define-key global-map (kbd "C-c n f") #'consult-denote-find)
   (define-key global-map (kbd "C-c n g") #'consult-denote-grep)
-  (consult-denote-mode 1)
-  )
+  (consult-denote-mode 1))
 
-(setq denote-date-format nil) ; read doc string
+(use-package denote-journal
+  :ensure t
+  :after denote
+  :commands (denote-journal-new-entry
+             denote-journal-new-or-existing-entry
+             denote-journal-link-or-create-entry)
+  :hook (calendar-mode . denote-journal-calendar-mode)
+  :config
+  ;; The `denote-journal-directory` is set globally below.
+  (setq denote-journal-keyword "journal")
+  (setq denote-journal-title-format nil)) ; Use default title format for custom functions.
 
-;; By default, we do not show the context of links.  We just display
-;; file names.  This provides a more informative view.
-(setq denote-backlinks-show-context t)
-
-;; Also see `denote-link-backlinks-display-buffer-action' which is a bit
-;; advanced.
-
-;; If you use Markdown or plain text files (Org renders links as buttons
-;; right away)
-(add-hook 'text-mode-hook #'denote-fontify-links-mode-maybe)
-
-;; We use different ways to specify a path for demo purposes.
-;; (setq denote-dired-directories
-;;       (list denote-directory
-;;             (thread-last denote-directory (expand-file-name "attachments"))
-;;             (expand-file-name "~/Documents/books")))
-
-;; Generic (great if you rename files Denote-style in lots of places):
-;; (add-hook 'dired-mode-hook #'denote-dired-mode)
-;;
-;; OR if only want it in `denote-dired-directories':
+;; Hook for Dired integration.
 (add-hook 'dired-mode-hook #'denote-dired-mode-in-directories)
 
-
-;; Automatically rename Denote buffers using the `denote-rename-buffer-format'.
-(denote-rename-buffer-mode 1)
-
-
-(with-eval-after-load 'org
-  (define-key org-mode-map (kbd "C-c n c") #'denote-region) ; "contents" mnemonic
-  (define-key org-mode-map (kbd "C-c n N") #'denote-type)
-  (define-key org-mode-map (kbd "C-c n d") #'denote-date)
-  (define-key org-mode-map (kbd "C-c n z") #'denote-signature) ; "zettelkasten" mnemonic
-  (define-key org-mode-map (kbd "C-c n s") #'denote-subdirectory)
-  (define-key org-mode-map (kbd "C-c n t") #'denote-template)
-  (define-key org-mode-map (kbd "C-c n i") #'denote-link) ; "insert" mnemonic
-  (define-key org-mode-map (kbd "C-c n I") #'denote-add-links)
-  (define-key org-mode-map (kbd "C-c n b") #'denote-backlinks)
-  (define-key org-mode-map (kbd "C-c n f f") #'denote-find-link)
-  (define-key org-mode-map (kbd "C-c n f b") #'denote-find-backlink))
-
-;; Note that `denote-rename-file' can work from any context, not just
-;; Dired bufffers.  That is why we bind it here to the `global-map'.
-(let ((map global-map))
-  (define-key map (kbd "C-c n n") #'denote)
-  (define-key map (kbd "C-c n r") #'denote-rename-file)
-  (define-key map (kbd "C-c n R") #'denote-rename-file-using-front-matter))
-
-;; Key bindings specifically for Dired.
-(let ((map dired-mode-map))
-  (define-key map (kbd "C-c C-d C-i") #'denote-link-dired-marked-notes)
-  (define-key map (kbd "C-c C-d C-r") #'denote-dired-rename-files)
-  (define-key map (kbd "C-c C-d C-k") #'denote-dired-rename-marked-files-with-keywords)
-  (define-key map (kbd "C-c C-d C-R") #'denote-dired-rename-marked-files-using-front-matter))
-
+;; Org Capture integration for Denote.
 (with-eval-after-load 'org-capture
   (setq denote-org-capture-specifiers "%l\n%i\n%?")
   (add-to-list 'org-capture-templates
@@ -98,34 +87,165 @@
                  :kill-buffer t
                  :jump-to-captured t)))
 
-;; Also check the commands `denote-link-after-creating',
-;; `denote-link-or-create'.  You may want to bind them to keys as well.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; CUSTOM JOURNALING WORKFLOW WITH TASK MANAGEMENT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(require 'cl-lib)
+(require 'seq) ;; Required for seq-find
+
+;; --- GLOBAL DEFINITIONS ---
+;; These variables must be defined here, outside of any `use-package`
+;; block, to ensure they are available when this file is loaded.
+(setq denote-directory (expand-file-name "~/Documents/elemento/newkb/"))
+(setq denote-journal-directory (expand-file-name "diario" denote-directory))
 
 
-;; If you want to have Denote commands available via a right click
-;; context menu, use the following and then enable
-;; `context-menu-mode'.
-(add-hook 'context-menu-functions #'denote-context-menu)
+;; --- FUNCTION DEFINITIONS ---
+;; All custom functions are defined here, before they are called by other code.
 
-(defun rolo-denote-journal ()
-  "Create an entry tagged 'journal', while prompting for a title."
+(defun journals_to_org_agenda ()
+  "Get journal files from the last month for Org Agenda."
+  (let* ((min-date (format-time-string "%Y%m%d"
+                                       (encode-time
+                                        (decoded-time-add (parse-time-string
+                                                           (calendar-date-string
+                                                            (calendar-current-date)))
+                                                          (make-decoded-time :month (- 1))))))
+         (all-journals (sort
+                        (directory-files denote-journal-directory nil "^[0-9].*_journal.*org$")
+                        #'string>))
+         (out-list nil))
+    (dolist (journal all-journals out-list)
+      (when (string> (substring journal 0 8) min-date)
+        (push (concat denote-journal-directory journal) out-list)))))
+
+(defun journal-day-exists-p (target)
+  "Check if a journal for a given day already exists. Target is papayaMMDD."
+  (file-expand-wildcards (concat denote-journal-directory target "*_journal*.org")))
+
+(defun find-previous-journal ()
+  "Find the file name of the most recent journal before today."
+  (let* ((today (format-time-string "%Y%m%d"))
+         (all-journals (sort (directory-files denote-journal-directory nil "^[0-9].*_journal.*org$") #'string>))
+         (previous-journal (seq-find (lambda (journal) (string< (substring journal 0 8) today))
+                                     all-journals)))
+    (if previous-journal
+        (progn
+          (message "Journaling: Found previous journal: %s" previous-journal)
+          previous-journal)
+      (message "Journaling: No previous journal file found."))))
+
+(defun my-refile-tasks (file)
+  "Refile all TODO and WAIT tasks to the specified FILE under '* TASKS'."
+  (interactive "FFile to refile tasks to: ")
+  ;; This is the definitive fix. We save the original values of the
+  ;; dynamic variables, but ONLY if they are currently bound. This
+  ;; avoids the `Symbol's value as variable is void' error.
+  (let ((original-archive-location (if (boundp 'org-archive-location) org-archive-location))
+        (original-save-context-info (if (boundp 'org-archive-save-context-info) org-archive-save-context-info)))
+    (unwind-protect
+        (progn
+          (setq org-archive-location (concat file "::* TASKS"))
+          (setq org-archive-save-context-info nil)
+          ;; Ensure the target file has a "* TASKS" heading.
+          (with-current-buffer (find-file-noselect file)
+            (goto-char (point-min))
+            (unless (re-search-forward "^\\* TASKS" nil t)
+              (goto-char (point-max))
+              (unless (bolp) (insert "\n"))
+              (insert "* TASKS\n")))
+          ;; Now, in the current buffer (the old journal), refile the tasks.
+          (goto-char (point-max))
+          (while (re-search-backward "^\\*\\* \\(TODO\\|WAIT\\)" nil t)
+            (org-archive-subtree)))
+      ;; This part runs no matter what, restoring the original values.
+      (setq org-archive-location original-archive-location)
+      (setq org-archive-save-context-info original-save-context-info))))
+
+(defun move-todos (todays-journal-path)
+  "Move all TODOs from the previous day's journal to TODAYS-JOURNAL-PATH."
+  (let ((previous-journal-name (find-previous-journal)))
+    (if previous-journal-name
+        (let ((previous-journal-path (file-name-concat denote-journal-directory previous-journal-name)))
+          (if (and todays-journal-path (file-exists-p previous-journal-path))
+              (progn
+                (message "Journaling: Moving tasks from '%s' to '%s'"
+                         (file-name-nondirectory previous-journal-path)
+                         (file-name-nondirectory todays-journal-path))
+                (with-current-buffer (find-file-noselect previous-journal-path)
+                  (my-refile-tasks todays-journal-path))
+                (kill-buffer (file-name-nondirectory previous-journal-path)))
+            (message "Journaling: Could not move tasks. Target: %s. Previous: %s (exists: %s)"
+                     todays-journal-path
+                     previous-journal-path
+                     (file-exists-p previous-journal-path))))
+      (message "Journaling: No previous journal found to move tasks from."))))
+
+(defun my-denote-journal-today ()
+  "Create or find today's journal and move tasks from the previous day."
   (interactive)
-  (denote
-   (denote--title-prompt)
-   '("journal")))
+  (let* ((today (format-time-string "%Y%m%d"))
+         (existing-file (car (journal-day-exists-p today)))
+         (todays-journal-path
+          (if existing-file
+              ;; If file exists, get its full path
+              (concat denote-journal-directory existing-file)
+            ;; Otherwise, create a new one and get its path
+            (denote
+             (format-time-string "%Yw%W-%a %e %b")  ; Title format
+             '("journal")
+             nil ; file-type
+             denote-journal-directory))))
+
+    ;; Now we have the definitive path to today's journal.
+    ;; Ensure the buffer is open and has the required structure.
+    (with-current-buffer (find-file-noselect todays-journal-path)
+      (when (not existing-file)
+        ;; It's a new file, so insert the template.
+        (insert "* THOUGHTS\n\n* NOTES\n\n* CODE\n\n* TASKS\n\n")
+        (save-buffer)))
+
+    ;; Now that today's journal is guaranteed to exist, move the unfinished tasks.
+    (move-todos todays-journal-path)
+
+    ;; If we created a new file, refresh the agenda files list.
+    (unless existing-file
+      (setq org-agenda-files (append '("~/Documents/org/todo.org")
+                                     (journals_to_org_agenda))))
+
+    ;; Finally, make sure the user is in today's journal buffer.
+    (switch-to-buffer (find-file-noselect todays-journal-path))))
+
+(defun my-denote-journal-date ()
+  "Create or find a journal for a specific date."
+  (declare (interactive-only t))
+  (interactive)
+  (let* ((date (org-read-date nil t))
+         (filename (car (journal-day-exists-p (format-time-string "%Y%m%d" date)))))
+    (if filename
+        (find-file filename)
+      (progn
+        (denote
+         (format-time-string "%Yw%W-%a %e %b" date)
+         '("journal")
+         nil
+         denote-journal-directory)
+        (insert "* THOUGHTS\n\n* NOTES\n\n* CODE\n\n* TASKS\n\n")))))
 
 
+;; --- CONFIGURATIONS USING CUSTOM FUNCTIONS ---
 
-;; agregando lo de journal
-(require 'denote-journal-extras)
-(setq denote-journal-extras-directory nil)
-(setq denote-journal-extras-title-format nil)
-;; Denote DOES NOT define any key bindings.  This is for the user to
-;; decide.  For example:
+;; --- IMPORTANT ---
+;; Change the path below to your main tasks file.
+(setq org-agenda-files (append '("~/Documents/org/todo.org")
+                               (journals_to_org_agenda)))
+
+;; New keybindings for the custom journaling workflow.
 (let ((map global-map))
-  ;; our custom command
-  (define-key map (kbd "C-c n j") #'denote-journal-extras-new-entry)
-  )
+  (define-key map (kbd "C-c n j") #'my-denote-journal-today)
+  (define-key map (kbd "C-c n o") #'my-denote-journal-date))
+
 
 (provide 'setup-denote)
 ;;; setup-denote.el ends here
