@@ -182,6 +182,29 @@
                      (file-exists-p previous-journal-path))))
       (message "Journaling: No previous journal found to move tasks from."))))
 
+(defun find-most-recent-journal ()
+  "Find the file name of the most recent journal."
+  (let* ((all-journals (sort (directory-files denote-journal-directory t "^[0-9].*_journal.*org$") #'string>)) ; Changed nil to t for full path
+         (most-recent-journal (car all-journals)))
+    (if most-recent-journal
+        (progn
+          (message "Journaling: Found most recent journal: %s" most-recent-journal)
+          most-recent-journal)
+      (message "Journaling: No journal file found."))))
+
+(defun set-org-refile-targets-to-most-recent-journal ()
+  "Sets `org-refile-targets` to the most recent journal file."
+  (interactive)
+  (let ((recent-journal-file (find-most-recent-journal)))
+    (when recent-journal-file
+      ;; Corrected structure: '(STRING) instead of '((STRING))
+      (setq org-refile-targets `((,recent-journal-file . (:regexp . "TASKS"))))
+      (message "Refile targets set to: %s" (car org-refile-targets)))))
+
+(set-org-refile-targets-to-most-recent-journal)
+
+
+
 (defun my-denote-journal-today ()
   "Create or find today's journal and move tasks from the previous day."
   (interactive)
@@ -193,9 +216,9 @@
               (concat denote-journal-directory existing-file)
             ;; Otherwise, create a new one and get its path
             (denote
-             (format-time-string "%Yw%W-%a %e %b")  ; Title format
+             (format-time-string "%Yw%W-%a %e %b") ; Title format
              '("journal")
-             nil ; file-type
+             nil                        ; file-type
              denote-journal-directory))))
 
     ;; Now we have the definitive path to today's journal.
