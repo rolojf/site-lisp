@@ -47,14 +47,34 @@
          "* %? :NOTE:\n%U\n%a\n" :clock-resume t)
         ))
 
-
 
 ;;; Refiling
 
 (setq org-refile-use-cache nil)
 
+(defun find-most-recent-journal ()
+  "Find the file name of the most recent journal."
+  (let* ((all-journals (sort (directory-files denote-journal-directory t "^[0-9].*_journal.*org$") #'string>)) ; Changed nil to t for full path
+         (most-recent-journal (car all-journals)))
+    (if most-recent-journal
+        (progn
+          (message "Journaling: Found most recent journal: %s" most-recent-journal)
+          most-recent-journal)
+      (message "Journaling: No journal file found."))))
+
+(defun set-org-refile-targets-to-most-recent-journal ()
+  "Sets `org-refile-targets` to the most recent journal file."
+  (interactive)
+  (let ((recent-journal-file (find-most-recent-journal)))
+    (when recent-journal-file
+      ;; Corrected structure: '(STRING) instead of '((STRING))
+      (setq org-refile-targets `((,recent-journal-file . (:regexp . "TASKS"))))
+      (message "Refile targets set to: %s" (car org-refile-targets)))))
+
+(set-org-refile-targets-to-most-recent-journal)
+
 ;; Targets include this file and any file contributing to the agenda - up to 5 levels deep
-(setq org-refile-targets '((nil :maxlevel . 5) (org-agenda-files :maxlevel . 5)))
+;; (setq org-refile-targets '((nil :maxlevel . 5) (org-agenda-files :maxlevel . 2)))
 
 (with-eval-after-load 'org-agenda
   (add-to-list 'org-agenda-after-show-hook 'org-show-entry))
@@ -178,8 +198,8 @@
 
 
 (setq
- org-agenda-files '("~/Documents/elemento/newkb/20240917T0952--inbox__pend.org"
-                    )
+ org-agenda-files '("~/Documents/elemento/newkb/20220728T144545--todo__pend.org"
+                    "~/Documents/elemento/newkb/diario/")
  org-directory "~/Documents/elemento/newkb/"
  org-clock-into-drawer t
  org-startup-indented t
@@ -190,13 +210,18 @@
  org-html-html5-fancy t
  org-log-done nil
  org-tags-column 65
- org-refile-targets `((nil :regexp . ,(rx-to-string `(seq line-start
-                                                          "** Terminados"
-                                                          ))))
- org-todo-keywords  (quote ((sequence "TODO(t)" "WAIT(w)" "|" "DONE(d)" "KILL(k)")
+ ;; org-refile-targets `((nil :regexp . ,(rx-to-string `(seq line-start
+ ;; "** Terminados"
+ ;; ))))
+ org-todo-keywords  (quote ((sequence "TODO(t)" "NEXT(n)" "WAIT(w)" "PROG(p)" "|" "DONE(d)" "KILL(k)")
                             ;; (sequence "PROY(p)" "WAIT(w)" "|"  "COMP(c)" "SDM(s)")
                             ))
- org-todo-repeat-to-state "TODO")
+ org-todo-repeat-to-state "TODO"
+ org-todo-keyword-faces (quote (("WAIT" :foreground "blue")
+                                ("NEXT" :foreground "gray")
+                                ("PROG" :foreground "yellow"))
+                               )
+ )
 
 (add-hook 'org-mode-hook 'whitespace-cleanup-mode)
 (add-hook 'org-mode-hook 'visual-line-mode)
@@ -210,12 +235,6 @@
 
 ;; (with-eval-after-load 'org
 ;;   (rolo/quita-tachado))
-
-(setq org-todo-keyword-faces
-      (quote (("WAIT" :foreground "blue")
-              )
-             )
-      )
 
 ;; (use-package ox-hugo
 ;;   :straight t          ;Auto-install the package from Melpa (optional)
@@ -232,6 +251,8 @@
 (use-package literate-calc-mode
   :ensure t
   :defer t
+  :config
+  ;; (calc-units-simplify-mode nil)
   )
 
 (use-package ob-mermaid

@@ -157,7 +157,7 @@
               (insert "* TASKS\n")))
           ;; Now, in the current buffer (the old journal), refile the tasks.
           (goto-char (point-max))
-          (while (re-search-backward "^\\*\\* \\(TODO\\|WAIT\\)" nil t)
+          (while (re-search-backward "^\\*\\* \\(TODO\\|WAIT\\|NEXT\\)" nil t)
             (org-archive-subtree)))
       ;; This part runs no matter what, restoring the original values.
       (setq org-archive-location original-archive-location)
@@ -215,7 +215,11 @@
                                      (journals_to_org_agenda))))
 
     ;; Finally, make sure the user is in today's journal buffer.
-    (switch-to-buffer (find-file-noselect todays-journal-path))))
+    (switch-to-buffer (find-file-noselect todays-journal-path)))
+
+  ;; After all journal operations are complete, update the refile target.
+  (set-org-refile-targets-to-most-recent-journal)
+  )
 
 (defun my-denote-journal-date ()
   "Create or find a journal for a specific date."
