@@ -178,8 +178,6 @@
 
 
 (setq
- org-agenda-files '("~/Documents/elemento/newkb/20220728T144545--todo__pend.org"
-                    "~/Documents/elemento/newkb/diario/")
  org-directory "~/Documents/elemento/newkb/"
  org-clock-into-drawer t
  org-startup-indented t

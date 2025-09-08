@@ -265,13 +265,16 @@
 
 ;; --- IMPORTANT ---
 ;; Change the path below to your main tasks file.
-(setq org-agenda-files (append '("~/Documents/org/todo.org")
-                               (journals_to_org_agenda)))
+;; (setq org-agenda-files (append '("~/Documents/org/todo.org") (journals_to_org_agenda)))
 
 ;; New keybindings for the custom journaling workflow.
 (let ((map global-map))
   (define-key map (kbd "C-c n j") #'my-denote-journal-today)
   (define-key map (kbd "C-c n o") #'my-denote-journal-date))
+
+(with-eval-after-load 'org (setq
+                            org-agenda-files '("~/Documents/elemento/newkb/20220728T144545--todo__pend.org"
+                                               "~/Documents/elemento/newkb/diario")))
 
 
 (provide 'setup-denote)
