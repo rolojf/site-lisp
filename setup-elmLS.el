@@ -12,45 +12,49 @@
 ;; C-c C-v      Run the test suite for the current project.
 ;; C-h .        eldoc-doc-buffer
 
+(with-eval-after-load 'treesit
+  ;; Add the Elm grammar repository to the list of sources
+  (add-to-list 'treesit-language-source-alist '(elm . ("https://github.com/elm-tooling/tree-sitter-elm.git"))))
 
-(use-package elm-mode
-  :ensure t
-  :defer t
-  :chords (
-           ("wr" . eglot-rename)
-           ("wa" . eglot-code-actions)
-           ("wf" . xref-find-references)
-           ("wc" . consult-eglot-symbols)
-           )
-  :bind (:map elm-mode-map
-              ("M-o" . origami-recursively-toggle-node )
-              ("M-O" . origami-toggle-all-nodes)
-              ("<C-tab>" . completion-at-point)
-              )
-  :config
-  (setq elm-mode-hook '(origami-mode )) ;;toggle-truncate-lines
-  ;; (setq elm-tags-on-save t)
-  (setq elm-tags-exclude-elm-stuff nil)
-  ;; (defun jsonrpc--log-event (connection message &optional type))
-  (fset #'jsonrpc--log-event #'ignore)
-  (setq eglot-events-buffer-size 0)
-  (add-hook 'elm-mode-hook
-            (lambda ()
-              (eglot-ensure)
-              (elm-format-on-save-mode)
-              (flycheck-mode nil)
-              (flymake-mode nil)
-              ))
-  (add-hook 'elm-mode-hook 'outli-mode)
-  (maybe-require-package 'elm-test-runner)
-  )
+;;; Use tree-sitter mode for Elm files instead of the default
+(add-to-list 'major-mode-remap-alist '(elm-mode. elm-ts-mode))
 
-(use-package eglot-booster
-  :straight '(eglot-booster :type git :host github :repo "jdtsmith/eglot-booster")
-  :after eglot
-  )
+;; (use-package elm-mode
+;;   :ensure t
+;;   :defer t
+;;   :chords (
+;;            ("wr" . eglot-rename)
+;;            ("wa" . eglot-code-actions)
+;;            ("wf" . xref-find-references)
+;;            ("wc" . consult-eglot-symbols)
+;;            )
+;;   :bind (:map elm-mode-map
+;;               ("M-o" . origami-recursively-toggle-node )
+;;               ("M-O" . origami-toggle-all-nodes)
+;;               ("<C-tab>" . completion-at-point)
+;;               )
+;;   :config
+;;   (setq elm-mode-hook '(origami-mode )) ;;toggle-truncate-lines
+;;   ;; (setq elm-tags-on-save t)
+;;   (setq elm-tags-exclude-elm-stuff nil)
+;;   ;; (defun jsonrpc--log-event (connection message &optional type))
+;;   (fset #'jsonrpc--log-event #'ignore)
+;;   (setq eglot-events-buffer-size 0)
+;;   (add-hook 'elm-mode-hook
+;;             (lambda ()
+;;               (eglot-ensure)
+;;               (elm-format-on-save-mode)
+;;               (flycheck-mode nil)
+;;               (flymake-mode nil)
+;;               ))
+;;   (add-hook 'elm-mode-hook 'outli-mode)
+;;   (maybe-require-package 'elm-test-runner)
+;;   )
 
-;; (require 'roc-mode)
+;; (use-package eglot-booster
+;;   :straight '(eglot-booster :type git :host github :repo "jdtsmith/eglot-booster")
+;;   :after eglot
+;;   )
 
 (provide 'setup-elmLS)
 ;;; setup-elmLS.el ends here.

@@ -30,6 +30,7 @@
 (require 'setup-denote)
 (require 'setup-gptel)
 (require 'setup-gleam)
+(require 'setup-wsl)
 ;; (require 'setup-pass)
 ;; (require 'setup-origami)
 ;; (require 'setup-atomic)
