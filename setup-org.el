@@ -230,13 +230,14 @@
   :ensure t
   :defer t
   :config
-  ;; (calc-units-simplify-mode nil)
+  (calc-units-simplify-mode t)
+  (defalias 'calcFunc-uconv 'math-convert-units)
   )
 
-(use-package ob-mermaid
-  :ensure t
-  :config (setq ob-mermaid-cli-path "/home/a1rolo/.npm-global/bin/mmdc")
-  )
+;; (use-package ob-mermaid
+;;   :ensure t
+;;   :config (setq ob-mermaid-cli-path "/home/a1rolo/.npm-global/bin/mmdc")
+;;   )
 
 
 (tool-bar-mode -1)

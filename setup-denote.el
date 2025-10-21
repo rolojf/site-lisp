@@ -201,8 +201,7 @@
       (setq org-refile-targets `((,recent-journal-file . (:regexp . "TASKS"))))
       (message "Refile targets set to: %s" (car org-refile-targets)))))
 
-(set-org-refile-targets-to-most-recent-journal)
-
+(add-hook 'org-agenda-mode-hook #'set-org-refile-targets-to-most-recent-journal)
 
 
 (defun my-denote-journal-today ()
@@ -226,7 +225,7 @@
     (with-current-buffer (find-file-noselect todays-journal-path)
       (when (not existing-file)
         ;; It's a new file, so insert the template.
-        (insert "* THOUGHTS\n\n* NOTES\n\n* CODE\n\n* TASKS\n\n")
+        (insert "* TASKS\n\n ** TODO [#B] Validar registrados los seguimientos y PREP de ayer\n** TODO [#B] Una respuesta a contacto de internet \n** TODO [#B] Un seguimiento a PREP\n** TODO [#B] Un Seg. a Cotizaciones enviadas\n** TODO [#B] Un seg. a prospecto de paneles\n")
         (save-buffer)))
 
     ;; Now that today's journal is guaranteed to exist, move the unfinished tasks.
@@ -244,21 +243,22 @@
   (set-org-refile-targets-to-most-recent-journal)
   )
 
-(defun my-denote-journal-date ()
-  "Create or find a journal for a specific date."
-  (declare (interactive-only t))
-  (interactive)
-  (let* ((date (org-read-date nil t))
-         (filename (car (journal-day-exists-p (format-time-string "%Y%m%d" date)))))
-    (if filename
-        (find-file filename)
-      (progn
-        (denote
-         (format-time-string "%Yw%W-%a %e %b" date)
-         '("journal")
-         nil
-         denote-journal-directory)
-        (insert "* THOUGHTS\n\n* NOTES\n\n* CODE\n\n* TASKS\n\n")))))
+;; (defun my-denote-journal-date ()
+;;   "Create or find a journal for a specific date."
+;;   (declare (interactive-only t))
+;;   (interactive)
+;;   (let* ((date (org-read-date nil t))
+;;          (filename (car (journal-day-exists-p (format-time-string "%Y%m%d" date)))))
+;;     (if filename
+;;         (find-file filename)
+;;       (progn
+;;         (denote
+;;          (format-time-string "%Yw%W-%a %e %b" date)
+;;          '("journal")
+;;          nil
+;;          denote-journal-directory)
+;;         (insert "* TASKS\n\n ** TODO [#B] Validar registrados los seguimientos y PREP de ayer\\n** TODO [#B] Una respuesta a contacto de internet\nn** TODO [#B] Un seguimiento a PREP\n\n** TODO [#B] Un Seg. a Cotizaciones enviadas\n\n** TODO [#B] Un seg. a prospecto de paneles\n\n")
+;;         ))))
 
 
 ;; --- CONFIGURATIONS USING CUSTOM FUNCTIONS ---
@@ -269,8 +269,8 @@
 
 ;; New keybindings for the custom journaling workflow.
 (let ((map global-map))
-  (define-key map (kbd "C-c n j") #'my-denote-journal-today)
-  (define-key map (kbd "C-c n o") #'my-denote-journal-date))
+  (define-key map (kbd "C-c n j") #'my-denote-journal-today))
+  ;; (define-key map (kbd "C-c n o") #'my-denote-journal-date))
 
 (with-eval-after-load 'org (setq
                             org-agenda-files '("~/Documents/elemento/newkb/20220728T144545--todo__pend.org"
