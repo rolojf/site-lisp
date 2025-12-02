@@ -24,6 +24,7 @@
 )
 (setq ispell-dictionary "es_MX")
 (setq ispell-local-dictionary "es_MX")
+(setq ispell-alternate-dictionary "/usr/share/hunspell/en_US.aff")
 ;;
 ;; Activate flyspell
 ;;

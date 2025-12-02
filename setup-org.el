@@ -174,7 +174,7 @@
       (shell . t)
       (sql . t)
       (sqlite . t)))))
-
+(setq org-confirm-babel-evaluate nil)
 
 
 (setq
