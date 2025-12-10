@@ -8,7 +8,7 @@
 (require  'setup-dired)
 (require  'setup-org)
 (require  'setup-spelling)
-(require  'setup-prettier)
+(require-package 'prettier-js)
 (require  'setup-customFaces)
 ;; (require 'setup-webmode)
 (require 'setup-elmLS)
@@ -37,6 +37,7 @@
 ;;(require  'ocultar-clases)
 ;;(require 'notmuch)
 ;;(require 'notmuch-config)
+(require 'ob-elm)
 
 (setq projectile-switch-project-action #'projectile-dired)
 (setq backup-directory-alist '(("." . "~/.emacs.d/backups")))

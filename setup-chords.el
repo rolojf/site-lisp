@@ -1,8 +1,8 @@
+;;; setup-chords.el --- Insert description here -*- lexical-binding: t -*-
+;;; Commentary: usar key-chord
+;;; Code:
+
 (require 'key-chord)
-(use-package use-package-chords
-             :straight t
-             :config (key-chord-mode 1)
-             )
 
 (key-chord-mode 1)
 (key-chord-define-global "xk" 'kill-buffer)
@@ -16,9 +16,11 @@
 (key-chord-define-global "x2" 'split-window-below)
 (key-chord-define-global "x3" 'split-window-right)
 (key-chord-define-global "x0" 'delete-window)
-(key-chord-define-global "xb" 'consult-buffer) ;;ivy-switch-buffer
+(key-chord-define-global "xb" 'consult-buffer)
+(key-chord-define-global "zp" 'prettier-prettify)
 
 (setq key-chord-two-keys-delay 0.10)
 (setq key-chord-one-key-delay 0.0)
 
 (provide 'setup-chords)
+;;; setup-chords.el ends here
