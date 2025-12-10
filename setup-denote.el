@@ -36,6 +36,7 @@
     ;; The variables `denote-directory` and `denote-journal-directory` are
     ;; now defined globally below to avoid load-order errors.
 
+<<<<<<< HEAD
     ;; Configuration for file naming and metadata.
     ;; WARNING: Removing %S from the format may lead to non-unique
     ;; identifiers if you create more than one note in the same minute.
@@ -50,6 +51,20 @@
     (denote-rename-buffer-mode 1)
     )
   )
+=======
+  ;; Configuration for file naming and metadata.
+  ;; WARNING: Removing %S from the format may lead to non-unique
+  ;; identifiers if you create more than one note in the same minute.
+  (setq denote-id-format "%Y%m%dT%H%M")
+  (setq denote-id-regexp "\\([0-9]\\{8\\}\\)\\(T[0-9]\\{4\\}\\)")
+  (setq denote-save-buffers nil)
+  (setq denote-infer-keywords t)
+  (setq denote-sort-keywords t)
+  (setq denote-prompts '(signature title keywords))
+  (setq denote-file-type nil) ; Org is the default.
+  (setq denote-date-prompt-use-org-read-date t)
+  (denote-rename-buffer-mode 1))
+>>>>>>> origin/master
 
 (when (maybe-require-package 'consult-denote)
   (with-eval-after-load 'denote
