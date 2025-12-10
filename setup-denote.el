@@ -8,72 +8,65 @@
 
 ;;; Code:
 
-(use-package denote
-  :ensure t
-  :hook
-  ;; Apply colours to Denote names in Dired.
-  ((dired-mode . denote-dired-mode))
-  :bind
-  ;; Standard Denote key bindings.
-  ( :map global-map
-    ("C-c n n" . denote)
-    ("C-c n d" . denote-dired)
+(when (maybe-require-package 'denote)
+  (with-eval-after-load 'denote
+    ;; Apply colours to Denote names in Dired.
+    (add-hook 'dired-mode 'denote-dired-mode)
+    ;; Hook for Dired integration.
+    (add-hook 'dired-mode-hook #'denote-dired-mode-in-directories)
+    ;; Standard Denote key bindings.
     ;; We will override C-c n g later with consult-denote.
-    ("C-c n l" . denote-link)
-    ("C-c n L" . denote-add-links)
-    ("C-c n b" . denote-backlinks)
-    ("C-c n q c" . denote-query-contents-link)
-    ("C-c n q f" . denote-query-filenames-link)
-    ("C-c n r" . denote-rename-file)
-    ("C-c n R" . denote-rename-file-using-front-matter)
+    (define-key global-map (kbd "C-c n n") 'denote)
+    (define-key global-map (kbd "C-c n d") 'denote-dired)
+    (define-key global-map (kbd "C-c n l") 'denote-link)
+    (define-key global-map (kbd "C-c n L") 'denote-add-links)
+    (define-key global-map (kbd "C-c n b") 'denote-backlinks)
+    (define-key global-map (kbd "C-c n q c") 'denote-query-contents-link)
+    (define-key global-map (kbd "C-c n q f") 'denote-query-filenames-link)
+    (define-key global-map (kbd "C-c n r") 'denote-rename-file)
+    (define-key global-map (kbd "C-c n R") 'denote-rename-file-using-front-matter)
 
     ;; Key bindings specifically for Dired.
-    :map dired-mode-map
-    ("C-c C-d C-i" . denote-dired-link-marked-notes)
-    ("C-c C-d C-r" . denote-dired-rename-files)
-    ("C-c C-d C-k" . denote-dired-rename-marked-files-with-keywords)
-    ("C-c C-d C-R" . denote-dired-rename-marked-files-using-front-matter))
+    (with-eval-after-load 'dired
+      (define-key dired-mode-map (kbd "C-c C-d C-i") 'denote-dired-link-marked-notes)
+      (define-key dired-mode-map (kbd "C-c C-d C-r") 'denote-dired-rename-files)
+      (define-key dired-mode-map (kbd "C-c C-d C-k") 'denote-dired-rename-marked-files-with-keywords)
+      (define-key dired-mode-map (kbd "C-c C-d C-R") 'denote-dired-rename-marked-files-using-front-matter))
 
-  :config
-  ;; The variables `denote-directory` and `denote-journal-directory` are
-  ;; now defined globally below to avoid load-order errors.
+    ;; The variables `denote-directory` and `denote-journal-directory` are
+    ;; now defined globally below to avoid load-order errors.
 
-  ;; Configuration for file naming and metadata.
-  ;; WARNING: Removing %S from the format may lead to non-unique
-  ;; identifiers if you create more than one note in the same minute.
-  (setq denote-id-format "%Y%m%dT%H%M")
-  (setq denote-id-regexp "\\([0-9]\\{8\\}\\)\\(T[0-9]\\{4\\}\\)")
-  (setq denote-save-buffers nil)
-  (setq denote-infer-keywords t)
-  (setq denote-sort-keywords t)
-  (setq denote-prompts '(title keywords))
-  (setq denote-file-type nil) ; Org is the default.
-  (setq denote-date-prompt-use-org-read-date t)
-  (denote-rename-buffer-mode 1))
+    ;; Configuration for file naming and metadata.
+    ;; WARNING: Removing %S from the format may lead to non-unique
+    ;; identifiers if you create more than one note in the same minute.
+    (setq denote-id-format "%Y%m%dT%H%M")
+    (setq denote-id-regexp "\\([0-9]\\{8\\}\\)\\(T[0-9]\\{4\\}\\)")
+    (setq denote-save-buffers nil)
+    (setq denote-infer-keywords t)
+    (setq denote-sort-keywords t)
+    (setq denote-prompts '(title keywords))
+    (setq denote-file-type nil)           ; Org is the default.
+    (setq denote-date-prompt-use-org-read-date t)
+    (denote-rename-buffer-mode 1)
+    )
+  )
 
-(use-package consult-denote
-  :ensure t
-  :after denote
-  :config
-  ;; Bind consult-denote commands.
-  (define-key global-map (kbd "C-c n f") #'consult-denote-find)
-  (define-key global-map (kbd "C-c n g") #'consult-denote-grep)
-  (consult-denote-mode 1))
+(when (maybe-require-package 'consult-denote)
+  (with-eval-after-load 'denote
+    ;; Bind consult-denote commands.
+    (define-key global-map (kbd "C-c n f") #'consult-denote-find)
+    (define-key global-map (kbd "C-c n g") #'consult-denote-grep)
+    (consult-denote-mode 1)))
 
-(use-package denote-journal
-  :ensure t
-  :after denote
-  :commands (denote-journal-new-entry
-             denote-journal-new-or-existing-entry
-             denote-journal-link-or-create-entry)
-  :hook (calendar-mode . denote-journal-calendar-mode)
-  :config
-  ;; The `denote-journal-directory` is set globally below.
-  (setq denote-journal-keyword "journal")
-  (setq denote-journal-title-format nil)) ; Use default title format for custom functions.
+(when (maybe-require-package 'denote-journal)
+  (with-eval-after-load 'denote
+    ;; :commands (denote-journal-new-entry denote-journal-new-or-existing-entry denote-journal-link-or-create-entry)
+    (add-hook 'calendar-mode 'denote-journal-calendar-mode)
+    ;; The `denote-journal-directory` is set globally below.
+    (setq denote-journal-keyword "journal")
+                                        ; Use default title format for custom functions.
+    (setq denote-journal-title-format nil)))
 
-;; Hook for Dired integration.
-(add-hook 'dired-mode-hook #'denote-dired-mode-in-directories)
 
 ;; Org Capture integration for Denote.
 (with-eval-after-load 'org-capture
