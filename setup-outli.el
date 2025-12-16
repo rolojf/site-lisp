@@ -4,7 +4,7 @@
 
 ;; * Uno
 
-(require 'outli)
+(require-package 'outli)
 (with-eval-after-load 'outli
   (define-key outli-mode-map (kbd "C-c C-p")
               (lambda ()
