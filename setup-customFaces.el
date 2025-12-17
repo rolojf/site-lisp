@@ -3,7 +3,7 @@
 ;;; Code:
 
 
-(set-face-attribute 'default nil :family "Iosevka SS05 Light" :height 150)
+(set-face-attribute 'default nil :family "Iosevka SS05 Light" :height 170)
 (set-face-attribute 'variable-pitch nil :family "Fira Sans Light" :height 1.0)
 (set-face-attribute 'fixed-pitch nil :family (face-attribute 'default :family))
 
