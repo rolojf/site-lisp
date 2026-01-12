@@ -226,10 +226,8 @@
 (setq org-id-ts-format "%Y%m%dT%H%M%S")
 
 
-(use-package literate-calc-mode
-  :ensure t
-  :defer t
-  :config
+(require-package 'literate-calc-mode)
+(with-eval-after-load 'literate-calc-mode
   (calc-units-simplify-mode t)
   (defalias 'calcFunc-uconv 'math-convert-units)
   )

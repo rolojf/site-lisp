@@ -1,14 +1,11 @@
-(require 'setup-straight)
-;; use-package
-;;; (eval-when-compile (require 'use-package))
-(setq use-package-enable-imenu-support t) ;; add imenu support for use-package declarations
+;; (setq use-package-enable-imenu-support t) ;; add imenu support for use-package declarations
 ;; (add-to-list 'package-archives '("org" . "https://elpa.nongnu.org/nongnu/") t)
 ;;
 (require  'setup-chords)
 (require  'setup-dired)
 (require  'setup-org)
 (require  'setup-spelling)
-(require  'setup-prettier)
+(require-package 'prettier-js)
 (require  'setup-customFaces)
 ;; (require 'setup-webmode)
 (require 'setup-elmLS)
@@ -37,6 +34,7 @@
 ;;(require  'ocultar-clases)
 ;;(require 'notmuch)
 ;;(require 'notmuch-config)
+(require-package 'ob-elm)
 
 (setq projectile-switch-project-action #'projectile-dired)
 (setq backup-directory-alist '(("." . "~/.emacs.d/backups")))

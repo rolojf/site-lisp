@@ -44,7 +44,7 @@
     (setq denote-save-buffers nil)
     (setq denote-infer-keywords t)
     (setq denote-sort-keywords t)
-    (setq denote-prompts 'signature title keywords)
+    (setq denote-prompts '(signature title keywords))
     (setq denote-file-type nil)           ; Org is the default.
     (setq denote-date-prompt-use-org-read-date t)
     (denote-rename-buffer-mode 1)

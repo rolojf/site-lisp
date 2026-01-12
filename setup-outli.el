@@ -4,15 +4,16 @@
 
 ;; * Uno
 
-(use-package outli
-  :straight (:host github :repo "jdtsmith/outli" :branch "main")
-  :bind (:map outli-mode-map ; convenience key to get back to containing heading
-              ("C-c C-p" . (lambda () (interactive) (outline-back-to-heading))))
-  :hook ((prog-mode) . outli-mode)
-  :custom (outli-heading-config '((elm-mode "-- " ?* nil nil)
-                                  (emacs-lisp-mode ";; " ?* nil nil)
-                                  ))
+(require-package 'outli)
+(with-eval-after-load 'outli
+  (define-key outli-mode-map (kbd "C-c C-p")
+              (lambda ()
+                (interactive)
+                (outline-back-to-heading)))
+  (add-hook 'prog-mode 'outli-mode)
+  (add-to-list 'outli-heading-config '(elm-mode "-- " ?* nil nil))
   )
+
 ;; * Dos
 
 (provide 'setup-outli)
