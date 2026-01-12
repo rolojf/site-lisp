@@ -19,7 +19,7 @@
     ;; Insert the output of wl-paste
     (insert (shell-command-to-string "wl-paste --no-newline"))))
 
-(global-set-key (kbd "C-y") 'wsl-wayland-paste)
+(global-set-key (kbd "C-M-y") 'wsl-wayland-paste)
 
 (provide 'setup-wsl)
 ;;; setup-wsl.el ends here
