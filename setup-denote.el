@@ -9,25 +9,23 @@
 ;;; Code:
 
 (when (maybe-require-package 'denote)
+  ;; Standard Denote key bindings.
+  (define-key global-map (kbd "C-c n n") 'denote)
+  (define-key global-map (kbd "C-c n l") 'denote-link)
+  (define-key global-map (kbd "C-c n L") 'denote-add-links)
+  (define-key global-map (kbd "C-c n b") 'denote-backlinks)
+  (define-key global-map (kbd "C-c n q c") 'denote-query-contents-link)
+  (define-key global-map (kbd "C-c n q f") 'denote-query-filenames-link)
   (with-eval-after-load 'denote
+    (define-key global-map (kbd "C-c n r") 'denote-rename-file)
+    (define-key global-map (kbd "C-c n R") 'denote-rename-file-using-front-matter)
     ;; Apply colours to Denote names in Dired.
     (add-hook 'dired-mode 'denote-dired-mode)
     ;; Hook for Dired integration.
     (add-hook 'dired-mode-hook #'denote-dired-mode-in-directories)
-    ;; Standard Denote key bindings.
-    ;; We will override C-c n g later with consult-denote.
-    (define-key global-map (kbd "C-c n n") 'denote)
-    (define-key global-map (kbd "C-c n d") 'denote-dired)
-    (define-key global-map (kbd "C-c n l") 'denote-link)
-    (define-key global-map (kbd "C-c n L") 'denote-add-links)
-    (define-key global-map (kbd "C-c n b") 'denote-backlinks)
-    (define-key global-map (kbd "C-c n q c") 'denote-query-contents-link)
-    (define-key global-map (kbd "C-c n q f") 'denote-query-filenames-link)
-    (define-key global-map (kbd "C-c n r") 'denote-rename-file)
-    (define-key global-map (kbd "C-c n R") 'denote-rename-file-using-front-matter)
-
     ;; Key bindings specifically for Dired.
     (with-eval-after-load 'dired
+      (define-key global-map (kbd "C-c n d") 'denote-dired)
       (define-key dired-mode-map (kbd "C-c C-d C-i") 'denote-dired-link-marked-notes)
       (define-key dired-mode-map (kbd "C-c C-d C-r") 'denote-dired-rename-files)
       (define-key dired-mode-map (kbd "C-c C-d C-k") 'denote-dired-rename-marked-files-with-keywords)
@@ -50,6 +48,7 @@
     (denote-rename-buffer-mode 1)
     )
   )
+
 
 (when (maybe-require-package 'consult-denote)
   (with-eval-after-load 'denote
@@ -218,7 +217,6 @@
     (with-current-buffer (find-file-noselect todays-journal-path)
       (when (not existing-file)
         ;; It's a new file, so insert the template.
-        (insert "* TASKS\n\n ** TODO [#B] Validar registrados los seguimientos y PREP de ayer\n** TODO [#B] Una respuesta a contacto de internet \n** TODO [#B] Un seguimiento a PREP\n** TODO [#B] Un Seg. a Cotizaciones enviadas\n** TODO [#B] Un seg. a prospecto de paneles\n")
         (save-buffer)))
 
     ;; Now that today's journal is guaranteed to exist, move the unfinished tasks.
@@ -235,26 +233,6 @@
   ;; After all journal operations are complete, update the refile target.
   (set-org-refile-targets-to-most-recent-journal)
   )
-
-;; (defun my-denote-journal-date ()
-;;   "Create or find a journal for a specific date."
-;;   (declare (interactive-only t))
-;;   (interactive)
-;;   (let* ((date (org-read-date nil t))
-;;          (filename (car (journal-day-exists-p (format-time-string "%Y%m%d" date)))))
-;;     (if filename
-;;         (find-file filename)
-;;       (progn
-;;         (denote
-;;          (format-time-string "%Yw%W-%a %e %b" date)
-;;          '("journal")
-;;          nil
-;;          denote-journal-directory)
-;;         (insert "* TASKS\n\n ** TODO [#B] Validar registrados los seguimientos y PREP de ayer\\n** TODO [#B] Una respuesta a contacto de internet\nn** TODO [#B] Un seguimiento a PREP\n\n** TODO [#B] Un Seg. a Cotizaciones enviadas\n\n** TODO [#B] Un seg. a prospecto de paneles\n\n")
-;;         ))))
-
-
-;; --- CONFIGURATIONS USING CUSTOM FUNCTIONS ---
 
 ;; --- IMPORTANT ---
 ;; Change the path below to your main tasks file.
