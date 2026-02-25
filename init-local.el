@@ -7,6 +7,7 @@
 (require  'setup-spelling)
 (require-package 'prettier-js)
 (require  'setup-customFaces)
+(require  'setup-agents)
 ;; (require 'setup-webmode)
 (require 'setup-elmLS)
 ;;(require 'setup-outshine)
