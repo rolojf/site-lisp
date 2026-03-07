@@ -5,7 +5,7 @@
 (when (maybe-require-package 'gptel)
   ;; Global keybinding
   ;; Define the keybinding immediately. This is what triggers the lazy load.
-  (define-key global-map (kbd "C-c <return>") 'gptel-send)
+  (define-key global-map (kbd "C-c M-RET") 'gptel-send)
 
   (with-eval-after-load 'gptel
     (add-hook 'gptel-mode 'visual-fill-column-mode)

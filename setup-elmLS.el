@@ -1,4 +1,5 @@
 ;; -*- lexical-binding: t; -*-
+
 ;; Keybinding   Description
 ;; C-c M-t      Generate a TAGS file for the current project.
 ;; M-.          Jump to tag at point.
@@ -12,49 +13,43 @@
 ;; C-c C-v      Run the test suite for the current project.
 ;; C-h .        eldoc-doc-buffer
 
+;;; Elm tree-sitter + eglot configuration
+
+;; Register grammar source (for `treesit-install-language-grammar' if needed)
 (with-eval-after-load 'treesit
-  ;; Add the Elm grammar repository to the list of sources
-  (add-to-list 'treesit-language-source-alist '(elm . ("https://github.com/elm-tooling/tree-sitter-elm.git"))))
+  (add-to-list 'treesit-language-source-alist
+               '(elm . ("https://github.com/elm-tooling/tree-sitter-elm.git"))))
 
-;;; Use tree-sitter mode for Elm files instead of the default
-(add-to-list 'major-mode-remap-alist '(elm-mode. elm-ts-mode))
+;; Install elm-ts-mode so that init-treesitter.el can remap elm-mode -> elm-ts-mode
+;; (the auto-remap fires only when elm-ts-mode is fboundp and the grammar .so exists)
+(maybe-require-package 'elm-ts-mode)
 
-;; (use-package elm-mode
-;;   :ensure t
-;;   :defer t
-;;   :chords (
-;;            ("wr" . eglot-rename)
-;;            ("wa" . eglot-code-actions)
-;;            ("wf" . xref-find-references)
-;;            ("wc" . consult-eglot-symbols)
-;;            )
-;;   :bind (:map elm-mode-map
-;;               ("M-o" . origami-recursively-toggle-node )
-;;               ("M-O" . origami-toggle-all-nodes)
-;;               ("<C-tab>" . completion-at-point)
-;;               )
-;;   :config
-;;   (setq elm-mode-hook '(origami-mode )) ;;toggle-truncate-lines
-;;   ;; (setq elm-tags-on-save t)
-;;   (setq elm-tags-exclude-elm-stuff nil)
-;;   ;; (defun jsonrpc--log-event (connection message &optional type))
-;;   (fset #'jsonrpc--log-event #'ignore)
-;;   (setq eglot-events-buffer-size 0)
-;;   (add-hook 'elm-mode-hook
-;;             (lambda ()
-;;               (eglot-ensure)
-;;               (elm-format-on-save-mode)
-;;               (flycheck-mode nil)
-;;               (flymake-mode nil)
-;;               ))
-;;   (add-hook 'elm-mode-hook 'outli-mode)
-;;   (maybe-require-package 'elm-test-runner)
-;;   )
+;; Register elm-language-server for both elm-mode and elm-ts-mode
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '((elm-mode elm-ts-mode) . ("elm-language-server" "--stdio"))))
 
-;; (use-package eglot-booster
-;;   :straight '(eglot-booster :type git :host github :repo "jdtsmith/eglot-booster")
-;;   :after eglot
-;;   )
+;; Start eglot automatically (hooks cover both modes; only one will be active)
+(add-hook 'elm-mode-hook #'eglot-ensure)
+(add-hook 'elm-ts-mode-hook #'eglot-ensure)
+
+;; Key-chord bindings for eglot commands in elm-mode
+(with-eval-after-load 'elm-mode
+  (key-chord-define elm-mode-map "wr" #'eglot-rename)
+  (key-chord-define elm-mode-map "wa" #'eglot-code-actions)
+  (key-chord-define elm-mode-map "wf" #'xref-find-references)
+  (key-chord-define elm-mode-map "wc" #'consult-eglot-symbols))
+
+;; Key-chord bindings for eglot commands in elm-ts-mode
+(with-eval-after-load 'elm-ts-mode
+  (key-chord-define elm-ts-mode-map "wr" #'eglot-rename)
+  (key-chord-define elm-ts-mode-map "wa" #'eglot-code-actions)
+  (key-chord-define elm-ts-mode-map "wf" #'xref-find-references)
+  (key-chord-define elm-ts-mode-map "wc" #'consult-eglot-symbols))
+
+;; Silence JSONRPC event logging for better performance
+(fset #'jsonrpc--log-event #'ignore)
+(setq eglot-events-buffer-size 0)
 
 (provide 'setup-elmLS)
 ;;; setup-elmLS.el ends here.

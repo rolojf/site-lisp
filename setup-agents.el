@@ -11,7 +11,8 @@
         agent-shell-prefer-viewport-interaction t
         ))
 
-
+;; claude plugins marketplaces update xenodium-emacs-skills
+;; para actualizar skills
 
 (provide 'setup-agents)
 ;;; setup-agents.el ends here
