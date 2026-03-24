@@ -47,7 +47,7 @@
          "* %? :NOTE:\n%U\n%a\n" :clock-resume t)
         ))
 
-
+
 ;;; Refiling
 
 (setq org-refile-use-cache nil)
@@ -88,7 +88,7 @@
 (setq org-refile-allow-creating-parent-nodes 'confirm)
 
 
-
+
 
 ;;; Org clock
 
@@ -124,7 +124,7 @@
   (define-key org-clock-mode-line-map [header-line mouse-2] 'org-clock-goto)
   (define-key org-clock-mode-line-map [header-line mouse-1] 'org-clock-menu))
 
-
+
 
 ;;; Archiving
 
@@ -133,7 +133,7 @@
 
 
 
-
+
 
 ;; (require-package 'org-pomodoro)
 ;; (setq org-pomodoro-keep-killed-pomodoro-time t)
@@ -243,3 +243,4 @@
 
 (provide 'setup-org)
 ;;; setup-org.el ends here
+
