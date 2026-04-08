@@ -1,3 +1,7 @@
+;;; setup-remote.el --- Insert description here -*- lexical-binding: t -*-
+;;; Commentary:
+;;; Code:
+
 ;; better work troguht ssh
 (vertico-flat-mode)
 
@@ -23,5 +27,10 @@
 ;; Terminal clipboard integration (if your SSH setup supports OSC 52)
 ;; (setq select-enable-clipboard t)
 
+(require-package 'clipetty)
+(global-clipetty-mode)
+
+
 (provide 'setup-remote)
 
+;;; setup-remote.el ends here
