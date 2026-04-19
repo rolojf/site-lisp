@@ -17,7 +17,7 @@
   (key-chord-define-global "x3" 'split-window-right)
   (key-chord-define-global "x0" 'delete-window)
   (key-chord-define-global "xb" 'consult-buffer)
-  (key-chord-define-global "zp" 'prettier-prettify)
+  (key-chord-define-global "zp" 'prettier-js-prettify)
   (setq key-chord-two-keys-delay 0.10)
   (setq key-chord-one-key-delay 0.0)
   (setq key-chord-typing-detection t)
