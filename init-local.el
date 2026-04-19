@@ -41,13 +41,13 @@
 (setq projectile-switch-project-action #'projectile-dired)
 (setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
 (setq delete-by-moving-to-trash t)
-(setq reb-re-syntax 'string)
+(setq trash-directory "~/.local/share/Trash/files")
 (defun file-size (filename)
   "Return size of file FILENAME in bytes.
     The size is converted to float for consistency.
     This doesn't recurse directories."
   (float
-   (file-attribute-size ; might be int or float
+   (file-attribute-size                 ; might be int or float
     (file-attributes filename))))
 
 (defun file-size-total (filename-list)
