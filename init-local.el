@@ -28,7 +28,7 @@
 (require 'setup-denote)
 (require 'setup-gptel)
 ;; (require 'setup-gleam)
-;; (require 'setup-wsl)
+(require 'setup-wsl)
 (require 'setup-remote)
 ;; (require 'setup-pass)
 ;; (require 'setup-origami)
