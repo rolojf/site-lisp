@@ -178,7 +178,7 @@
 
 
 (setq
- org-directory "~/Documents/elemento/newkb/"
+ org-directory "~/newkb/"
  org-clock-into-drawer t
  org-startup-indented t
  ;; org-agenda-custom-commands '("p" "important tasks" tags "PRIORITY=\"A\"")
@@ -191,8 +191,7 @@
  ;; org-refile-targets `((nil :regexp . ,(rx-to-string `(seq line-start
  ;; "** Terminados"
  ;; ))))
- org-todo-keywords  (quote ((sequence "TODO(t)" "NEXT(n)" "WAIT(w)" "PROG(p)" "|" "DONE(d)" "KILL(k)")
-                            ;; (sequence "PROY(p)" "WAIT(w)" "|"  "COMP(c)" "SDM(s)")
+ org-todo-keywords  (quote ((sequence "TODO(t)" "NEXT(n)" "WAIT(w)" "PROG(p)" "SDM(s)" "|" "DONE(d)" "KILL(k)")
                             ))
  org-todo-repeat-to-state "TODO"
  org-todo-keyword-faces (quote (("WAIT" :foreground "blue")

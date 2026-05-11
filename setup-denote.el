@@ -89,7 +89,7 @@
 ;; --- GLOBAL DEFINITIONS ---
 ;; These variables must be defined here, outside of any `use-package`
 ;; block, to ensure they are available when this file is loaded.
-(setq denote-directory (expand-file-name "~/Documents/elemento/newkb/"))
+(setq denote-directory (expand-file-name "~/newkb/"))
 (setq denote-journal-directory (expand-file-name "diario" denote-directory))
 
 
@@ -244,8 +244,8 @@
   ;; (define-key map (kbd "C-c n o") #'my-denote-journal-date))
 
 (with-eval-after-load 'org (setq
-                            org-agenda-files '("~/Documents/elemento/newkb/20220728T144545--todo__pend.org"
-                                               "~/Documents/elemento/newkb/diario")))
+                            org-agenda-files '("~/newkb/20220728T144545--todo__pend.org"
+                                               "~/newkb/diario")))
 
 
 (provide 'setup-denote)
