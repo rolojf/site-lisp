@@ -9,7 +9,7 @@
 
 (when (maybe-require-package 'dired-hide-dotfiles)
   (with-eval-after-load 'dired-hide-dotfiles
-    (add-hook 'dired-mode 'dired-hide-dotfiles-mode)
+    (add-hook 'dired-mode-hook 'dired-hide-dotfiles-mode)
     (define-key dired-mode-map "h" #'dired-hide-dotfiles-mode)
     )
   (add-hook 'dired-mode-hook
@@ -18,7 +18,7 @@
   )
 
 ;; default was: "-al"
-(setq dired-listing-switches "-alGhvF --group-directories-first")
+(setq dired-listing-switches "-alGhv --group-directories-first")
 
 (require-package 'ztree)
 
