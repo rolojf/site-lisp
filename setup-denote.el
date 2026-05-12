@@ -129,7 +129,8 @@
       (message "Journaling: No previous journal file found."))))
 
 (defun my-refile-tasks (file)
-  "Refile all TODO and WAIT tasks to the specified FILE under '* TASKS'."
+  "Refile every level-2 TODO/WAIT/NEXT subtree in the current buffer to FILE under '* TASKS'.
+Headlines in other states (DONE, KILL, SDM, PROG, etc.) are left behind."
   (interactive "FFile to refile tasks to: ")
   ;; This is the definitive fix. We save the original values of the
   ;; dynamic variables, but ONLY if they are currently bound. This
@@ -382,7 +383,7 @@ Buffers opened only for the search are killed before returning."
 
 (defun my--referir-update-state (file pos new-state)
   "In FILE, move to POS and set the TODO state of that headline to NEW-STATE.
-NEW-STATE is the string \"DONE\" or \"KILL\".  Saves the buffer."
+NEW-STATE is the string \"DONE\", \"KILL\", or \"SDM\".  Saves the buffer."
   (with-current-buffer (find-file-noselect file)
     (org-with-wide-buffer
      (goto-char pos)
@@ -426,12 +427,12 @@ subtree was copied, nil if skipped."
       t))))
 
 (defun my-referir-pendientes ()
-  "Refer DONE/KILL tasks from the current buffer to active PRIADS files.
+  "Refer DONE/KILL/SDM tasks from the current buffer to active PRIADS files.
 Operates on the buffer the user invoked the command from — typically the
 previous day's diario after rolling, but no automatic file discovery is
-performed.  For each closed task:
+performed.  For each closed (DONE, KILL) or shelved (SDM) task:
 - If an active PRIADS file has a headline with the same title, update its
-  TODO state to match (DONE or KILL).
+  TODO state to match (DONE, KILL, or SDM).
 - Otherwise, prompt (via `denote-file-prompt') to choose a PRIADS file;
   copy the subtree under `* completadas' there.  RET on an empty prompt
   skips the task."
@@ -443,7 +444,7 @@ performed.  For each closed task:
      (org-map-entries
       (lambda ()
         (let ((state (org-get-todo-state)))
-          (when (member state '("DONE" "KILL"))
+          (when (member state '("DONE" "KILL" "SDM"))
             (let* ((title (org-get-heading t t t t))
                    (hit (my--referir-find-headline title)))
               (cond
