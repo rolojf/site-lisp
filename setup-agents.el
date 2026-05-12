@@ -11,6 +11,10 @@
         agent-shell-prefer-viewport-interaction t
         ))
 
+(global-set-key (kbd "C-c s") #'agent-shell)
+(global-unset-key (kbd "M-Z"))
+
+
 ;; claude plugins marketplaces update xenodium-emacs-skills
 ;; para actualizar skills
 
