@@ -469,17 +469,18 @@ performed.  For each closed (DONE, KILL) or shelved (SDM) task:
                    ((or (null choice) (string= choice "(omitir)"))
                     (cl-incf skipped))
                    ((string= choice "(crear nuevo PRIADS)")
-                    (let ((src-buf (current-buffer))
-                          (src-pt (point)))
-                      (call-interactively #'denote)
-                      (let ((target denote-last-path))
-                        (with-current-buffer src-buf
-                          (save-excursion
-                            (goto-char src-pt)
-                            (if (and target (file-exists-p target)
-                                     (my--referir-copy-to-completadas target))
-                                (cl-incf copied)
-                              (cl-incf skipped)))))))
+                    (let* ((src-buf (current-buffer))
+                           (src-pt (point))
+                           (target (condition-case nil
+                                       (call-interactively #'denote)
+                                     (quit nil))))
+                      (with-current-buffer src-buf
+                        (save-excursion
+                          (goto-char src-pt)
+                          (if (and (stringp target) (file-exists-p target)
+                                   (my--referir-copy-to-completadas target))
+                              (cl-incf copied)
+                            (cl-incf skipped))))))
                    (t
                     (let ((target (expand-file-name choice denote-directory)))
                       (if (my--referir-copy-to-completadas target)
