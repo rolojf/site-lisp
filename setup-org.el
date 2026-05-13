@@ -224,6 +224,12 @@
 (setq org-id-link-to-org-use-id 't)
 (setq org-id-ts-format "%Y%m%dT%H%M%S")
 
+;; Org inherits `flymake-mode' from `text-mode-hook' (init-flymake.el),
+;; and `flymake-flycheck-auto' registers `flymake-flycheck:org-lint',
+;; whose `invalid-id-link' checker runs `org-id-update-id-locations' on
+;; every save -- scanning every org-agenda/org-id file. Disable it.
+(add-hook 'org-mode-hook (lambda () (flymake-mode -1)))
+
 
 (require-package 'literate-calc-mode)
 (with-eval-after-load 'literate-calc-mode

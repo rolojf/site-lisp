@@ -34,6 +34,11 @@
 ;;(mapcar (lambda (mode-hook) (add-hook mode-hook 'flyspell-prog-mode))
 ;;    '(c-mode-common-hook R-mode-hook emacs-lisp-mode-hook))
 (add-hook 'org-mode-hook 'turn-on-flyspell)
+
+;; Debounce flyspell so it runs on idle rather than on every keystroke.
+(when (maybe-require-package 'flyspell-lazy)
+  (with-eval-after-load 'flyspell
+    (flyspell-lazy-mode 1)))
 ;;
 (defun fd-switch-dictionary()
       (interactive)
