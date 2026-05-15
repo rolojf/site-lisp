@@ -48,6 +48,17 @@
         (message "Dictionary switched from %s to %s" dic change)))
 (global-set-key (kbd "<f8>")   'fd-switch-dictionary)
 
+;; Auto-detect language per paragraph and switch the ispell dictionary.
+(when (maybe-require-package 'guess-language)
+  (with-eval-after-load 'guess-language
+    (setq guess-language-languages '(en es))
+    (setq guess-language-min-paragraph-length 35)
+    (setq guess-language-langcodes
+          '((en . ("en_US" "English"))
+            (es . ("es_MX" "Spanish")))))
+  (add-hook 'text-mode-hook #'guess-language-mode)
+  (add-hook 'org-mode-hook  #'guess-language-mode))
+
 (provide 'setup-spelling)
 
 ;;; setup-spelling.el ends here
