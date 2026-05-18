@@ -26,6 +26,7 @@
 ;; (require 'setup-roam2)
 ;; (require 'setup-howm)
 (require 'setup-denote)
+(require 'setup-journaling)
 (require 'setup-gptel)
 ;; (require 'setup-gleam)
 (require 'setup-wsl)
