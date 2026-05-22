@@ -54,8 +54,8 @@
     (setq guess-language-languages '(en es))
     (setq guess-language-min-paragraph-length 35)
     (setq guess-language-langcodes
-          '((en . ("en_US" "English"))
-            (es . ("es_MX" "Spanish")))))
+          '((en . ("en_US" "English" "en" "English"))
+            (es . ("es_MX" nil       "es" "Spanish")))))
   (add-hook 'text-mode-hook #'guess-language-mode)
   (add-hook 'org-mode-hook  #'guess-language-mode))
 
