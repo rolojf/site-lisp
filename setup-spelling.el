@@ -38,7 +38,15 @@
 ;; Debounce flyspell so it runs on idle rather than on every keystroke.
 (when (maybe-require-package 'flyspell-lazy)
   (with-eval-after-load 'flyspell
-    (flyspell-lazy-mode 1)))
+    (flyspell-lazy-mode 1))
+  ;; flyspell-lazy-check-visible falla con
+  ;; (wrong-type-argument number-or-marker-p nil) cuando el timer
+  ;; dispara sobre un buffer sin ventana visible (window-end es nil).
+  (with-eval-after-load 'flyspell-lazy
+    (advice-add 'flyspell-lazy-check-visible :around
+                (lambda (orig &rest args)
+                  (when (get-buffer-window (current-buffer))
+                    (apply orig args))))))
 ;;
 (defun fd-switch-dictionary()
       (interactive)
