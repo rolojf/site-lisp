@@ -24,6 +24,13 @@
 
 (setq denote-journal-directory (expand-file-name "diario" denote-directory))
 
+(defconst my--programados-file
+  (expand-file-name "PROGRAMADOS.org" denote-journal-directory)
+  "Holding file in diario/ for PROG (scheduled-for-later) tasks.
+`my-referir-pendientes' parks PROG headlines here under `* TASKS'; a new
+day's `my-denote-journal-today' pulls back the ones whose SCHEDULED date
+has arrived.  Created lazily on first use.")
+
 
 ;; --- FUNCTION DEFINITIONS ---
 ;; All custom functions are defined here, before they are called by other code.
@@ -129,6 +136,51 @@ Headlines in other states (DONE, KILL, SDM, PROG, etc.) are left behind."
 (add-hook 'org-agenda-mode-hook #'set-org-refile-targets-to-most-recent-journal)
 
 
+(defun my--programados-pull-due (target-journal target-date)
+  "Move due PROGRAMADOS tasks into TARGET-JOURNAL's `* TASKS'.
+A task is due when its SCHEDULED date is on or before TARGET-DATE (a
+\"YYYYMMDD\" string).  The subtree is moved out of PROGRAMADOS (not
+copied) and keeps its PROG state.  No-op when `my--programados-file' does
+not exist.  Returns the number of tasks moved."
+  (when (file-exists-p my--programados-file)
+    (let ((original-archive-location
+           (if (boundp 'org-archive-location) org-archive-location))
+          (original-save-context-info
+           (if (boundp 'org-archive-save-context-info)
+               org-archive-save-context-info))
+          (moved 0))
+      (unwind-protect
+          (progn
+            (setq org-archive-location (concat target-journal "::* TASKS"))
+            (setq org-archive-save-context-info nil)
+            ;; Ensure the target journal has a `* TASKS' heading.
+            (with-current-buffer (find-file-noselect target-journal)
+              (org-with-wide-buffer
+               (goto-char (point-min))
+               (unless (re-search-forward "^\\* TASKS" nil t)
+                 (goto-char (point-max))
+                 (unless (bolp) (insert "\n"))
+                 (insert "* TASKS\n"))))
+            ;; Move every due level-2 task out of PROGRAMADOS.  Iterate back
+            ;; to front so archiving a subtree never shifts pending matches.
+            (with-current-buffer (find-file-noselect my--programados-file)
+              (org-with-wide-buffer
+               (goto-char (point-max))
+               (while (re-search-backward "^\\*\\* " nil t)
+                 (let ((sched (org-get-scheduled-time (point))))
+                   (when (and sched
+                              (not (string< target-date
+                                            (format-time-string "%Y%m%d" sched))))
+                     (org-archive-subtree)
+                     (cl-incf moved)))))
+              (save-buffer)))
+        (setq org-archive-location original-archive-location)
+        (setq org-archive-save-context-info original-save-context-info))
+      (when (> moved 0)
+        (message "PROGRAMADOS: %d tarea(s) traída(s) a %s"
+                 moved (file-name-nondirectory target-journal)))
+      moved)))
+
 (defun my-denote-journal-today ()
   "Create or find today's journal and move tasks from the previous day."
   (interactive)
@@ -154,6 +206,9 @@ Headlines in other states (DONE, KILL, SDM, PROG, etc.) are left behind."
 
     ;; Now that today's journal is guaranteed to exist, move the unfinished tasks.
     (move-todos todays-journal-path)
+
+    ;; Pull back any parked PROG task whose scheduled date has arrived.
+    (my--programados-pull-due todays-journal-path today)
 
     ;; If we created a new file, refresh the agenda files list.
     (unless existing-file
@@ -322,25 +377,28 @@ NEW-STATE is the string \"DONE\", \"KILL\", or \"SDM\".  Saves the buffer."
      (org-todo new-state))
     (save-buffer)))
 
-(defun my--referir-copy-to-completadas (target-file)
-  "Copy the current source subtree to `* completadas' in TARGET-FILE.
-Point must be on the source headline when called.  Creates the
-`* completadas' headline if missing.  Skips silently if a headline with
-the same title already exists under `* completadas'.  Returns t if the
-subtree was copied, nil if skipped."
+(defun my--referir-copy-subtree (target-file headline &optional append-date)
+  "Copy the current source subtree under `* HEADLINE' in TARGET-FILE.
+Point must be on the source headline when called.  Creates TARGET-FILE
+and the `* HEADLINE' headline if missing.  Skips silently if a headline
+with the same title already exists under `* HEADLINE'.  When APPEND-DATE
+is non-nil, today's inactive timestamp is appended to the copied title
+\(the `* completadas' behavior).  Always saves TARGET-FILE.  Returns t if
+the subtree was copied, nil if skipped as a duplicate."
   (let* ((title (org-get-heading t t t t))
+         (header-regexp (concat "^\\* " (regexp-quote headline)))
          (existing-titles (make-hash-table :test 'equal))
          (rfloc nil))
     (with-current-buffer (find-file-noselect target-file)
       (org-with-wide-buffer
        (goto-char (point-min))
-       (unless (re-search-forward "^\\* completadas" nil t)
+       (unless (re-search-forward header-regexp nil t)
          (goto-char (point-max))
          (unless (bolp) (insert "\n"))
-         (insert "* completadas\n"))
+         (insert "* " headline "\n"))
        (goto-char (point-min))
-       (re-search-forward "^\\* completadas")
-       (setq rfloc (list "completadas" (buffer-file-name) nil
+       (re-search-forward header-regexp)
+       (setq rfloc (list headline (buffer-file-name) nil
                          (line-beginning-position)))
        (org-back-to-heading t)
        (let ((end (save-excursion (org-end-of-subtree t t))))
@@ -358,28 +416,35 @@ subtree was copied, nil if skipped."
             (org-log-refile nil))
         (org-refile nil nil rfloc "Refer"))
       (with-current-buffer (find-file-noselect target-file)
-        ;; Anexar la fecha de hoy al título del headline recién copiado.
-        (org-with-wide-buffer
-         (goto-char (point-min))
-         (re-search-forward "^\\* completadas")
-         (org-back-to-heading t)
-         (let ((end (save-excursion (org-end-of-subtree t t))))
-           (save-excursion
-             (forward-line 1)
-             (catch 'done
-               (while (re-search-forward org-heading-regexp end t)
-                 (when (equal (org-get-heading t t t t) title)
-                   (org-edit-headline
-                    (concat title " " (my--referir-date-stamp)))
-                   (throw 'done t)))))))
+        (when append-date
+          ;; Anexar la fecha de hoy al título del headline recién copiado.
+          (org-with-wide-buffer
+           (goto-char (point-min))
+           (re-search-forward header-regexp)
+           (org-back-to-heading t)
+           (let ((end (save-excursion (org-end-of-subtree t t))))
+             (save-excursion
+               (forward-line 1)
+               (catch 'done
+                 (while (re-search-forward org-heading-regexp end t)
+                   (when (equal (org-get-heading t t t t) title)
+                     (org-edit-headline
+                      (concat title " " (my--referir-date-stamp)))
+                     (throw 'done t))))))))
         (save-buffer))
       t))))
 
-(defconst my--referir-tags '("x" "c" "n" "t" "u")
+(defun my--referir-copy-to-completadas (target-file)
+  "Copy the current source subtree to `* completadas' in TARGET-FILE.
+Thin wrapper over `my--referir-copy-subtree' preserving the historical
+behavior: appends today's date stamp to the copied title."
+  (my--referir-copy-subtree target-file "completadas" t))
+
+(defconst my--referir-tags '("x" "c" "n" "t" "u" "g")
   "Tags con los que `my-referir-pendientes' marca el heading fuente
 una vez procesado: x=omitido, c=copiado a existente, n=copiado a nuevo,
 t=copiado vía match de tag/filetag, u=estado actualizado en PRIADS por
-match de título.")
+match de título, g=programado (PROG copiado a PROGRAMADOS).")
 
 (defun my--referir-already-tagged-p ()
   "Return non-nil if the headline at point already carries one of
@@ -440,7 +505,24 @@ and, failing that, the full destination prompt.
 Newly created PRIADS are pushed onto `my--referir-created-priads' so later
 entries in the same run see them as candidates."
   (let ((state (org-get-todo-state)))
-    (when (member state '("DONE" "KILL" "SDM"))
+    (cond
+     ((equal state "PROG")
+      (cond
+       ((my--referir-already-tagged-p) :already)
+       (t
+        ;; Toda tarea PROG debe llevar fecha: si no la trae, programar a una
+        ;; semana de hoy para que la corrida diaria pueda traerla de vuelta.
+        (unless (org-get-scheduled-time (point))
+          (let ((org-log-reschedule nil))
+            (org-schedule nil (format-time-string
+                               "%Y-%m-%d"
+                               (time-add (current-time) (days-to-time 7))))))
+        (my--referir-copy-subtree my--programados-file "TASKS" nil)
+        (my--referir-add-tag "g")
+        (message "⏳ \"%s\": programado a PROGRAMADOS"
+                 (org-get-heading t t t t))
+        :programado)))
+     ((member state '("DONE" "KILL" "SDM"))
       (cond
        ((my--referir-already-tagged-p) :already)
        (t
@@ -549,7 +631,7 @@ entries in the same run see them as candidates."
                       (if (my--referir-copy-to-completadas target)
                           (progn (my--referir-add-tag "c")
                                  :copied)
-                        :skipped))))))))))))))))
+                        :skipped)))))))))))))))))
 
 (defun my-referir-pendientes ()
   "Refer DONE/KILL/SDM tasks to active PRIADS files, según dónde esté el cursor.
@@ -588,7 +670,7 @@ a un PRIADS se anexa la fecha de hoy al título (ver
   (when (org-before-first-heading-p)
     (user-error "El cursor no está en ningún headline; no se procesó nada"))
   (let ((my--referir-created-priads nil)
-        (updated 0) (copied 0) (skipped 0) (already 0)
+        (updated 0) (copied 0) (skipped 0) (already 0) (programados 0)
         (has-children (save-excursion
                         (org-back-to-heading t)
                         (and (org-goto-first-child) t))))
@@ -597,7 +679,8 @@ a un PRIADS se anexa la fecha de hoy al título (ver
                   (:updated (cl-incf updated))
                   (:copied  (cl-incf copied))
                   (:skipped (cl-incf skipped))
-                  (:already (cl-incf already)))))
+                  (:already (cl-incf already))
+                  (:programado (cl-incf programados)))))
       (if has-children
           ;; Varios: subárbol en el punto, CON pregunta de omitir.
           (org-with-wide-buffer
@@ -614,8 +697,8 @@ a un PRIADS se anexa la fecha de hoy al título (ver
               (message "El headline no es una tarea cerrada (DONE/KILL/SDM)."))))))
     (when (buffer-modified-p) (save-buffer))
     (message
-     "Referir pendientes: %d actualizados, %d copiados, %d saltados, %d ya-marcados"
-     updated copied skipped already)))
+     "Referir pendientes: %d actualizados, %d copiados, %d saltados, %d ya-marcados, %d programados"
+     updated copied skipped already programados)))
 
 
 (provide 'setup-journaling)
