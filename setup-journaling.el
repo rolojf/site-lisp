@@ -238,6 +238,8 @@ Subdirectories (e.g. diario/) and .org_archive files are excluded."
   "Copy every TODO subtree in the current buffer to the most recent diario.
 Skips entries whose headline already exists in the diario and entries
 whose ancestor headline is itself in the TODO state.
+Before copying, tags set locally on the immediate parent headline are
+added to the entry (and kept in this file, which is saved afterward).
 Returns `no-todos' or a cons (COPIED . SKIPPED).  Raises `user-error'
 when the user cancels at the save prompt or when no diario exists."
   (unless (buffer-file-name)
@@ -284,12 +286,20 @@ when the user cancels at the save prompt or when no diario exists."
             ((gethash title existing-titles)
              (cl-incf skipped))
             (t
+             (let ((parent-tags
+                    (save-excursion
+                      (when (org-up-heading-safe)
+                        (org-get-tags nil t)))))
+               (when parent-tags
+                 (org-set-tags (delete-dups
+                                (append (org-get-tags nil t) parent-tags)))))
              (let ((org-refile-keep t)
                    (org-log-refile nil))
                (org-refile nil nil rfloc "Copy"))
              (puthash title t existing-titles)
              (cl-incf copied)))))
        "/TODO" 'file)
+      (when (buffer-modified-p) (save-buffer))
       (with-current-buffer (find-file-noselect target)
         (save-buffer))
       (if (and (= copied 0) (= skipped 0))
