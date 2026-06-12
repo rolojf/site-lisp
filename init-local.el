@@ -38,6 +38,7 @@
 ;;(require 'notmuch)
 ;;(require 'notmuch-config)
 (require-package 'ob-elm)
+(require 'setup-cotizador)
 
 (setq projectile-switch-project-action #'projectile-dired)
 (setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
