@@ -240,6 +240,8 @@ Skips entries whose headline already exists in the diario and entries
 whose ancestor headline is itself in the TODO state.
 Before copying, tags set locally on the immediate parent headline are
 added to the entry (and kept in this file, which is saved afterward).
+When an entry already exists in the diario, it is not duplicated: any
+missing tags are added in place to the existing diario entry instead.
 Returns `no-todos' or a cons (COPIED . SKIPPED).  Raises `user-error'
 when the user cancels at the save prompt or when no diario exists."
   (unless (buffer-file-name)
@@ -269,30 +271,45 @@ when the user cancels at the save prompt or when no diario exists."
                            (line-beginning-position)))
          (org-map-entries
           (lambda ()
-            (puthash (org-get-heading t t t t) t existing-titles)))))
+            (puthash (org-get-heading t t t t) (point-marker) existing-titles)))))
       ;; Iterate TODO entries in the source buffer.
       (org-map-entries
        (lambda ()
-         (let ((title (org-get-heading t t t t))
-               (has-todo-ancestor
-                (save-excursion
-                  (catch 'found
-                    (while (org-up-heading-safe)
-                      (when (equal (org-get-todo-state) "TODO")
-                        (throw 'found t)))
-                    nil))))
+         (let* ((title (org-get-heading t t t t))
+                (has-todo-ancestor
+                 (save-excursion
+                   (catch 'found
+                     (while (org-up-heading-safe)
+                       (when (equal (org-get-todo-state) "TODO")
+                         (throw 'found t)))
+                     nil)))
+                (parent-tags
+                 (save-excursion
+                   (when (org-up-heading-safe)
+                     (org-get-tags nil t))))
+                (merged-tags (delete-dups
+                              (append (org-get-tags nil t) parent-tags))))
            (cond
             (has-todo-ancestor)              ; pulled in by an ancestor copy
             ((gethash title existing-titles)
+             ;; Already in the diario: don't duplicate.  Persist the parent's
+             ;; tags on the source child and add only the missing tags to the
+             ;; existing diario entry.
+             (when parent-tags
+               (org-set-tags merged-tags))
+             (let ((m (gethash title existing-titles)))
+               (when (and (markerp m) merged-tags)
+                 (with-current-buffer (marker-buffer m)
+                   (save-excursion
+                     (goto-char m)
+                     (let* ((cur (org-get-tags nil t))
+                            (new (delete-dups (append cur merged-tags))))
+                       (unless (equal cur new)
+                         (org-set-tags new)))))))
              (cl-incf skipped))
             (t
-             (let ((parent-tags
-                    (save-excursion
-                      (when (org-up-heading-safe)
-                        (org-get-tags nil t)))))
-               (when parent-tags
-                 (org-set-tags (delete-dups
-                                (append (org-get-tags nil t) parent-tags)))))
+             (when parent-tags
+               (org-set-tags merged-tags))
              (let ((org-refile-keep t)
                    (org-log-refile nil))
                (org-refile nil nil rfloc "Copy"))
