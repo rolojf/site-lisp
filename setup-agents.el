@@ -17,8 +17,22 @@
 ;; para actualizar skills
 
 (require-package 'pi-coding-agent)
+
 (defalias 'pi 'pi-coding-agent)
 
+(with-eval-after-load 'tramp
+  (add-to-list 'tramp-remote-path 'tramp-own-remote-path))
+
+(defconst my-sprite-tercero-path
+  "/ssh:sprite@localhost#3000:/home/sprite/"
+  "Ruta TRAMP al Sprite tercero.")
+
+(defun my-tercero ()
+  "Abrir el directorio principal del Sprite tercero."
+  (interactive)
+  (find-file my-sprite-tercero-path))
+
+;; (global-set-key (kbd "C-c s 3") #'my-open-sprite-tercero)
 
 (provide 'setup-agents)
 ;;; setup-agents.el ends here
