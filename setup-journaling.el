@@ -358,22 +358,72 @@ Returns t so the kill proceeds normally; a `user-error' from
 ;;; REFERIR PENDIENTES
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defconst my--priads-active-signature-regexp "==[pri]--"
-  "Regex matching the signature segment of active PRIADS in Denote filenames.
+(defconst my--priads-active-signature-regexp
+  "\\`[0-9]\\{8\\}T[0-9]\\{4\\}\\([0-9]\\{2\\}\\)?==[pri]--.*\\.org\\'"
+  "Regex matching active PRIADS Denote filenames at the root of `denote-directory'.
 Covers proyectos (p), responsabilidades (r), intereses (i).  Excludes
-on-hold (sp/sr/si), archived (ap/ar/ai/ad), datos (d), some-day-maybe (s),
-journals and legacy files without signature.")
+subdirectories such as diario/, on-hold (sp/sr/si), archived
+(ap/ar/ai/ad), datos (d), some-day-maybe (s), journals and legacy files
+without signature.")
+
+(defun my--priads-active-file-p (file)
+  "Return non-nil when FILE is an active PRIADS root .org file.
+Active PRIADS are only files directly under `denote-directory' whose
+filename signature is p, r, or i.  This excludes diario/ and every other
+subdirectory."
+  (let* ((file (and file (expand-file-name file)))
+         (root (file-name-as-directory (expand-file-name denote-directory)))
+         (relative (and file (file-relative-name file root))))
+    (and file
+         (file-in-directory-p file root)
+         relative
+         (not (string-match-p "/" relative))
+         (string= (file-name-extension file) "org")
+         (string-match-p my--priads-active-signature-regexp relative))))
 
 (defun my--priads-active-files ()
-  "Return absolute paths of active PRIADS files (signature p, r, or i)."
-  (denote-directory-files my--priads-active-signature-regexp nil t))
+  "Return absolute paths of active PRIADS files directly under `denote-directory'.
+Only files with signature p, r, or i are included.  Use Denote's file
+listing, but with an anchored filename regexp so subdirectories like
+diario/ cannot match."
+  (seq-filter #'my--priads-active-file-p
+              (denote-directory-files my--priads-active-signature-regexp
+                                      nil t)))
 
-(defun my--referir-find-headline (title)
-  "Search active PRIADS files for a headline whose text equals TITLE.
+(defconst my--referir-create-priads-choice "(crear nuevo PRIADS)"
+  "Choice label used by `my-referir-pendientes' to create a PRIADS.")
+
+(defconst my--referir-all-priads-choice "(buscar en todos los PRIADS activos)"
+  "Choice label used by `my-referir-pendientes' to search all PRIADS.")
+
+(defun my--referir-read-title-action (candidate-files)
+  "Ask the third-step action for `my-referir-pendientes'.
+The user can create a new PRIADS, search all active PRIADS, or select one
+specific CANDIDATE-FILES entry.  Return the selected string."
+  (let ((relative-files (mapcar (lambda (f)
+                                  (file-relative-name f denote-directory))
+                                candidate-files)))
+    (completing-read
+     "Referir/buscar tarea por título: "
+     (append (list my--referir-create-priads-choice
+                   my--referir-all-priads-choice)
+             relative-files)
+     nil t nil nil my--referir-all-priads-choice)))
+
+(defun my--referir-find-headline (title &optional files)
+  "Search FILES for a headline whose text equals TITLE.
 Return (FILE . POSITION) of the first match, or nil if none found.
-Buffers opened only for the search are killed before returning."
-  (let ((files (my--priads-active-files))
-        (result nil))
+Buffers opened only for the search are killed before returning.  When
+FILES is nil, search all active PRIADS files."
+  (let* ((raw-files (or files (my--priads-active-files)))
+         (bad-files (seq-remove #'my--priads-active-file-p raw-files))
+         (files (seq-filter #'my--priads-active-file-p raw-files))
+         (result nil))
+    (when bad-files
+      (user-error "Búsqueda cancelada: destino no-PRIADS detectado: %s"
+                  (mapconcat (lambda (f)
+                               (file-relative-name f denote-directory))
+                             bad-files ", ")))
     (catch 'found
       (dolist (file files)
         (let* ((existing (get-file-buffer file))
@@ -385,7 +435,9 @@ Buffers opened only for the search are killed before returning."
                         (goto-char (point-min))
                         (catch 'hit
                           (while (re-search-forward org-heading-regexp nil t)
-                            (when (equal (org-get-heading t t t t) title)
+                            (when (equal (my--referir-strip-date
+                                          (org-get-heading t t t t))
+                                         title)
                               (throw 'hit (line-beginning-position))))
                           nil))))
                   (when pos
@@ -467,6 +519,48 @@ Thin wrapper over `my--referir-copy-subtree' preserving the historical
 behavior: appends today's date stamp to the copied title."
   (my--referir-copy-subtree target-file "completadas" t))
 
+(defun my--referir-copy-to-new-priads (title)
+  "Create a PRIADS with `denote' and copy the current task there.
+Point must be on the source headline.  TITLE is used only for messages.
+Return `:copied' or `:skipped'."
+  (let* ((src-buf (current-buffer))
+         (src-pt (point))
+         (target
+          (condition-case err
+              (call-interactively #'denote)
+            (quit
+             (message "denote abortado por C-g")
+             nil)
+            (error
+             (message "Error en denote: %S" err)
+             nil))))
+    (when (and (stringp target)
+               (find-buffer-visiting target))
+      (with-current-buffer (find-buffer-visiting target)
+        (save-buffer)))
+    (with-current-buffer src-buf
+      (save-excursion
+        (goto-char src-pt)
+        (cond
+         ((not (stringp target))
+          (message "→ \"%s\": no se creó archivo (saltado)" title)
+          :skipped)
+         ((not (file-exists-p target))
+          (message "→ \"%s\": archivo %s no existe en disco (saltado)"
+                   title target)
+          :skipped)
+         ((my--referir-copy-to-completadas target)
+          (push target my--referir-created-priads)
+          (my--referir-add-tag "n")
+          (message "✚ \"%s\": copiado a nuevo PRIADS %s"
+                   title
+                   (file-name-nondirectory target))
+          :copied)
+         (t
+          (message "→ \"%s\": copy-to-completadas falló (saltado)"
+                   title)
+          :skipped))))))
+
 (defconst my--referir-tags '("x" "c" "n" "t" "u" "g")
   "Tags con los que `my-referir-pendientes' marca el heading fuente
 una vez procesado: x=omitido, c=copiado a existente, n=copiado a nuevo,
@@ -518,16 +612,16 @@ título base aunque ya se haya anexado la fecha en una corrida previa."
 Se enlaza dinámicamente en el comando para que las entradas posteriores los
 vean como candidatos.")
 
-(defun my--referir-process-entry (skip-omit)
+(defun my--referir-process-entry (_skip-omit)
   "Refer the closed/SDM task at point to an active PRIADS.
 Point must be on the source headline.  Returns one of the keywords
 `:already', `:copied', `:skipped', `:updated', or nil when the entry is
 not a DONE/KILL/SDM task.
 
-When SKIP-OMIT is non-nil the y/n \"¿Omitir?\" prompt is bypassed (used
-when the user invoked the command on a single headline, where the intent
-to process it is unambiguous); the entry then falls through to title-match
-and, failing that, the full destination prompt.
+After the automatic tag/filetag route, always ask positively whether to
+refer the task before looking for a matching task title or prompting for a
+destination.  `_skip-omit' is kept only for compatibility with existing
+call sites.
 
 Newly created PRIADS are pushed onto `my--referir-created-priads' so later
 entries in the same run see them as candidates."
@@ -557,9 +651,17 @@ entries in the same run see them as candidates."
                (local-tags (seq-difference (org-get-tags nil t)
                                            my--referir-tags
                                            #'string=))
+               (prompt-tags (org-get-tags nil nil))
+               (prompt-title (concat (org-get-heading t nil t t)
+                                     (when prompt-tags
+                                       (concat " :"
+                                               (mapconcat #'identity
+                                                          prompt-tags ":")
+                                               ":"))))
                (candidates (delete-dups
-                            (append my--referir-created-priads
-                                    (my--priads-active-files))))
+                            (seq-filter #'my--priads-active-file-p
+                                        (append my--referir-created-priads
+                                                (my--priads-active-files)))))
                (tag-matches (when local-tags
                               (my--referir-tag-matches local-tags
                                                        candidates)))
@@ -571,94 +673,56 @@ entries in the same run see them as candidates."
             (if (my--referir-copy-to-completadas tag-hit)
                 (progn (my--referir-add-tag "t")
                        (message "✚ \"%s\": copiado vía tag a %s"
-                                title
+                                prompt-title
                                 (file-name-nondirectory tag-hit))
                        :copied)
               :skipped))
-           ;; 2. Confirmar omitir (salvo en modo de un solo headline).
-           ((and (not skip-omit)
-                 (y-or-n-p (format "¿Omitir \"%s\"? " title)))
-            (my--referir-add-tag "x")
-            :skipped)
-           ;; 3. Match por título (solo si la headline no trae tags
-           ;;    locales que apunten a PRIADS — el tag manda).
+           ;; 2–3. Preguntar positivamente y elegir qué hacer.  Si se busca
+           ;;      en todos los PRIADS y no se encuentra, volver a preguntar
+           ;;      para esta misma tarea.
            (t
-            (let ((hit (when (null tag-matches)
-                         (my--referir-find-headline title))))
-              (cond
-               (hit
-                (my--referir-update-state (car hit) (cdr hit) state)
-                (my--referir-add-tag "u")
-                (message "↻ \"%s\": estado actualizado en %s"
-                         title
-                         (file-name-nondirectory (car hit)))
-                :updated)
-               ;; 4. Prompt completo.
-               (t
-                (let* ((cands (cons
-                               "(crear nuevo PRIADS)"
-                               (mapcar (lambda (f)
-                                         (file-relative-name
-                                          f denote-directory))
-                                       candidates)))
-                       (choice
-                        (condition-case nil
-                            (completing-read
-                             (format "Referir \"%s\" a PRIADS: "
-                                     title)
-                             cands nil t)
-                          (quit nil))))
-                  (cond
-                   ((null choice)
-                    (my--referir-add-tag "x")
-                    :skipped)
-                   ((string= choice "(crear nuevo PRIADS)")
-                    (let* ((src-buf (current-buffer))
-                           (src-pt (point))
-                           (target
-                            (condition-case err
-                                (call-interactively #'denote)
-                              (quit
-                               (message "denote abortado por C-g")
-                               nil)
-                              (error
-                               (message "Error en denote: %S" err)
-                               nil))))
-                      (when (and (stringp target)
-                                 (find-buffer-visiting target))
-                        (with-current-buffer
-                            (find-buffer-visiting target)
-                          (save-buffer)))
-                      (with-current-buffer src-buf
-                        (save-excursion
-                          (goto-char src-pt)
-                          (cond
-                           ((not (stringp target))
-                            (message "→ \"%s\": no se creó archivo (saltado)"
-                                     title)
-                            :skipped)
-                           ((not (file-exists-p target))
-                            (message "→ \"%s\": archivo %s no existe en disco (saltado)"
-                                     title target)
-                            :skipped)
-                           ((my--referir-copy-to-completadas target)
-                            (push target my--referir-created-priads)
-                            (my--referir-add-tag "n")
-                            (message "✚ \"%s\": copiado a nuevo PRIADS %s"
-                                     title
-                                     (file-name-nondirectory target))
-                            :copied)
-                           (t
-                            (message "→ \"%s\": copy-to-completadas falló (saltado)"
-                                     title)
-                            :skipped))))))
-                   (t
-                    (let ((target (expand-file-name
-                                   choice denote-directory)))
-                      (if (my--referir-copy-to-completadas target)
-                          (progn (my--referir-add-tag "c")
-                                 :copied)
-                        :skipped)))))))))))))))))
+            (cl-loop
+             for res =
+             (cond
+              ((not (y-or-n-p (format "¿Quiere referir tarea \"%s\"? "
+                                      prompt-title)))
+               (my--referir-add-tag "x")
+               :skipped)
+              (t
+               (let ((choice (condition-case nil
+                                 (my--referir-read-title-action candidates)
+                               (quit nil))))
+                 (cond
+                  ((null choice)
+                   (my--referir-add-tag "x")
+                   :skipped)
+                  ((string= choice my--referir-create-priads-choice)
+                   (my--referir-copy-to-new-priads title))
+                  (t
+                   (let* ((selected-files
+                           (unless (string= choice my--referir-all-priads-choice)
+                             (list (expand-file-name choice denote-directory))))
+                          (hit (my--referir-find-headline title selected-files)))
+                     (cond
+                      (hit
+                       (my--referir-update-state (car hit) (cdr hit) state)
+                       (my--referir-add-tag "u")
+                       (message "↻ \"%s\": estado actualizado en %s"
+                                title
+                                (file-name-nondirectory (car hit)))
+                       :updated)
+                      (selected-files
+                       (if (my--referir-copy-to-completadas (car selected-files))
+                           (progn (my--referir-add-tag "c")
+                                  :copied)
+                         :skipped))
+                      (t
+                       (read-key
+                        (format "No se encontró \"%s\" en los PRIADS activos; presiona una tecla para volver a elegir."
+                                prompt-title))
+                       :not-found))))))))
+             until (not (eq res :not-found))
+             finally return res))))))))))
 
 (defun my-referir-pendientes ()
   "Refer DONE/KILL/SDM tasks to active PRIADS files, según dónde esté el cursor.
@@ -667,11 +731,11 @@ El alcance depende de la posición del punto al invocar el comando
 (`C-c n e'):
 
 - En un headline CON headlines hijos → se procesa el subárbol (la raíz y
-  sus descendientes), y por cada tarea cerrada se hace la pregunta y/n de
-  omitir, como siempre.
+  sus descendientes), y por cada tarea cerrada se pregunta positivamente
+  si se quiere referir.
 - En un headline HOJA (sin descendientes), o en el CUERPO de un headline →
-  se procesa solo ese headline, y se OMITE la pregunta de omitir (es obvio
-  que se quiere procesarlo).
+  se procesa solo ese headline, con la misma pregunta positiva antes de
+  buscar coincidencias por título.
 - Antes del primer encabezado (fuera de todo headline) → no se procesa nada.
 
 Cada tarea cerrada (DONE, KILL) o aplazada (SDM) que aún no lleve uno de
@@ -679,12 +743,14 @@ Cada tarea cerrada (DONE, KILL) o aplazada (SDM) que aún no lleve uno de
 
 1. Tag local que matchea las keywords de exactamente un PRIADS activo →
    copia bajo `* completadas' y marca `:t:'.
-2. (Modo varios) preguntar y/n omitir; si sí, marca `:x:'.
-3. Sin tag que apunte a un PRIADS y existe un heading con el mismo título
-   en un PRIADS activo → actualiza su estado TODO y marca `:u:'.
-4. Si no, prompt de destino entre PRIADS activos y recién creados, más
-   `(crear nuevo PRIADS)'.  Existente → `:c:'; nuevo vía `denote' → `:n:';
-   abortar con C-g → `:x:'.
+2. Preguntar `¿Quiere referir tarea ...?'; si no, marca `:x:`.
+3. Preguntar la acción de título: `(crear nuevo PRIADS)', buscar en todos
+   los PRIADS activos, o elegir un archivo específico.  Si encuentra un
+   heading con el mismo título, actualiza su estado TODO y marca `:u:'.
+   Si se eligió un archivo específico y no hay match, copia ahí bajo
+   `* completadas' y marca `:c:`.
+4. Si se buscó en todos y no hay match, solo reporta que no se encontró y
+   deja la tarea sin marca de referido para volver a revisarla después.
 
 El subárbol fuente nunca se mueve, solo se copia, y el heading original se
 anota con un tag de una letra para que las re-corridas lo salten.  Al copiar
@@ -698,6 +764,7 @@ a un PRIADS se anexa la fecha de hoy al título (ver
     (user-error "El cursor no está en ningún headline; no se procesó nada"))
   (let ((my--referir-created-priads nil)
         (updated 0) (copied 0) (skipped 0) (already 0) (programados 0)
+        (not-found 0)
         (has-children (save-excursion
                         (org-back-to-heading t)
                         (and (org-goto-first-child) t))))
@@ -707,15 +774,16 @@ a un PRIADS se anexa la fecha de hoy al título (ver
                   (:copied  (cl-incf copied))
                   (:skipped (cl-incf skipped))
                   (:already (cl-incf already))
-                  (:programado (cl-incf programados)))))
+                  (:programado (cl-incf programados))
+                  (:not-found (cl-incf not-found)))))
       (if has-children
-          ;; Varios: subárbol en el punto, CON pregunta de omitir.
+          ;; Varios: subárbol en el punto, con pregunta positiva por tarea.
           (org-with-wide-buffer
            (org-back-to-heading t)
            (org-map-entries
             (lambda () (tally (my--referir-process-entry nil)))
             nil 'tree))
-        ;; Uno: solo el headline contenedor, SIN pregunta de omitir.
+        ;; Uno: solo el headline contenedor, con la misma pregunta positiva.
         (save-excursion
           (org-back-to-heading t)
           (let ((res (my--referir-process-entry t)))
@@ -724,8 +792,8 @@ a un PRIADS se anexa la fecha de hoy al título (ver
               (message "El headline no es una tarea cerrada (DONE/KILL/SDM)."))))))
     (when (buffer-modified-p) (save-buffer))
     (message
-     "Referir pendientes: %d actualizados, %d copiados, %d saltados, %d ya-marcados, %d programados"
-     updated copied skipped already programados)))
+     "Referir pendientes: %d actualizados, %d copiados, %d saltados, %d ya-marcados, %d programados, %d no-encontrados"
+     updated copied skipped already programados not-found)))
 
 
 (provide 'setup-journaling)
