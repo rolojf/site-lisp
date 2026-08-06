@@ -1,5 +1,4 @@
 ;;; setup-journaling.el --- Daily diario, PRIADS workflow, and referir-pendientes -*- lexical-binding: t -*-
-
 ;;; Commentary:
 ;;; Custom journaling on top of Denote: a per-day "diario/" file, copy
 ;;; un-finished TODOs forward at the start of a new day, copy PRIADS TODOs
@@ -25,9 +24,9 @@
 (setq denote-journal-directory (expand-file-name "diario" denote-directory))
 
 (defconst my--programados-file
-  (expand-file-name "PROGRAMADOS.org" denote-journal-directory)
-  "Holding file in diario/ for PROG (scheduled-for-later) tasks.
-`my-referir-pendientes' parks PROG headlines here under `* TASKS'; a new
+  (expand-file-name "LUEGO.org" denote-journal-directory)
+  "Holding file in diario/ for COLD (scheduled-for-later) tasks.
+`my-referir-pendientes' parks COLD headlines here under `* TASKS'; a new
 day's `my-denote-journal-today' pulls back the ones whose SCHEDULED date
 has arrived.  Created lazily on first use.")
 
@@ -53,7 +52,9 @@ has arrived.  Created lazily on first use.")
 
 (defun journal-day-exists-p (target)
   "Check if a journal for a given day already exists. Target is papayaMMDD."
-  (file-expand-wildcards (concat denote-journal-directory target "*_journal*.org")))
+  (file-expand-wildcards
+   (file-name-concat denote-journal-directory
+                     (concat target "*_journal*.org"))))
 
 (defun find-previous-journal ()
   "Find the file name of the most recent journal before today."
@@ -69,7 +70,7 @@ has arrived.  Created lazily on first use.")
 
 (defun my-refile-tasks (file)
   "Refile every level-2 TODO/WAIT/NEXT subtree in the current buffer to FILE under '* TASKS'.
-Headlines in other states (DONE, KILL, SDM, PROG, etc.) are left behind."
+Headlines in other states (DONE, KILL, SDM, COLD, etc.) are left behind."
   (interactive "FFile to refile tasks to: ")
   ;; This is the definitive fix. We save the original values of the
   ;; dynamic variables, but ONLY if they are currently bound. This
@@ -89,7 +90,7 @@ Headlines in other states (DONE, KILL, SDM, PROG, etc.) are left behind."
               (insert "* TASKS\n")))
           ;; Now, in the current buffer (the old journal), refile the tasks.
           (goto-char (point-max))
-          (while (re-search-backward "^\\*\\* \\(TODO\\|WAIT\\|NEXT\\)" nil t)
+          (while (re-search-backward "^\\*\\* \\(TODO\\|WAIT\\|PROG\\|NEXT\\)" nil t)
             (org-archive-subtree)))
       ;; This part runs no matter what, restoring the original values.
       (setq org-archive-location original-archive-location)
@@ -137,9 +138,9 @@ Headlines in other states (DONE, KILL, SDM, PROG, etc.) are left behind."
 
 
 (defun my--programados-pull-due (target-journal target-date)
-  "Move due PROGRAMADOS tasks into TARGET-JOURNAL's `* TASKS'.
+  "Move due LUEGO tasks into TARGET-JOURNAL's `* TASKS'.
 A task is due when its SCHEDULED date is on or before TARGET-DATE (a
-\"YYYYMMDD\" string).  The subtree is moved out of PROGRAMADOS (not
+\"YYYYMMDD\" string).  The subtree is moved out of LUEGO (not
 copied) and keeps its PROG state.  No-op when `my--programados-file' does
 not exist.  Returns the number of tasks moved."
   (when (file-exists-p my--programados-file)
@@ -161,7 +162,7 @@ not exist.  Returns the number of tasks moved."
                  (goto-char (point-max))
                  (unless (bolp) (insert "\n"))
                  (insert "* TASKS\n"))))
-            ;; Move every due level-2 task out of PROGRAMADOS.  Iterate back
+            ;; Move every due level-2 task out of LUEGO.  Iterate back
             ;; to front so archiving a subtree never shifts pending matches.
             (with-current-buffer (find-file-noselect my--programados-file)
               (org-with-wide-buffer
@@ -177,7 +178,7 @@ not exist.  Returns the number of tasks moved."
         (setq org-archive-location original-archive-location)
         (setq org-archive-save-context-info original-save-context-info))
       (when (> moved 0)
-        (message "PROGRAMADOS: %d tarea(s) traída(s) a %s"
+        (message "FRIOS: %d tarea(s) traída(s) a %s"
                  moved (file-name-nondirectory target-journal)))
       moved)))
 
@@ -189,7 +190,7 @@ not exist.  Returns the number of tasks moved."
          (todays-journal-path
           (if existing-file
               ;; If file exists, get its full path
-              (concat denote-journal-directory existing-file)
+              existing-file
             ;; Otherwise, create a new one and get its path
             (denote
              (format-time-string "%Yw%W-%a %e %b") ; Title format
@@ -565,7 +566,7 @@ Return `:copied' or `:skipped'."
   "Tags con los que `my-referir-pendientes' marca el heading fuente
 una vez procesado: x=omitido, c=copiado a existente, n=copiado a nuevo,
 t=copiado vía match de tag/filetag, u=estado actualizado en PRIADS por
-match de título, g=programado (PROG copiado a PROGRAMADOS).")
+match de título, g=programado (PROG copiado a LUEGO).")
 
 (defun my--referir-already-tagged-p ()
   "Return non-nil if the headline at point already carries one of
@@ -627,7 +628,7 @@ Newly created PRIADS are pushed onto `my--referir-created-priads' so later
 entries in the same run see them as candidates."
   (let ((state (org-get-todo-state)))
     (cond
-     ((equal state "PROG")
+     ((equal state "COLD")
       (cond
        ((my--referir-already-tagged-p) :already)
        (t
@@ -640,7 +641,7 @@ entries in the same run see them as candidates."
                                (time-add (current-time) (days-to-time 7))))))
         (my--referir-copy-subtree my--programados-file "TASKS" nil)
         (my--referir-add-tag "g")
-        (message "⏳ \"%s\": programado a PROGRAMADOS"
+        (message "⏳ \"%s\": programado a LUEGO"
                  (org-get-heading t t t t))
         :programado)))
      ((member state '("DONE" "KILL" "SDM"))
@@ -794,6 +795,22 @@ a un PRIADS se anexa la fecha de hoy al título (ver
     (message
      "Referir pendientes: %d actualizados, %d copiados, %d saltados, %d ya-marcados, %d programados, %d no-encontrados"
      updated copied skipped already programados not-found)))
+
+;;;;;;;;;;;;;;;;;
+;; Los PROG
+;;;;;;;;;;;;;;;;;
+
+(defun my-org-agenda-current-file ()
+  "Mostrar la Agenda View solamente para el archivo Org actual."
+  (interactive)
+  (unless (derived-mode-p 'org-mode)
+    (user-error "Este comando debe ejecutarse desde un archivo Org"))
+  (unless buffer-file-name
+    (user-error "El buffer actual no está asociado con un archivo"))
+  (org-agenda nil "a" 'buffer))
+
+(global-set-key (kbd "C-c n a") #'my-org-agenda-current-file)
+
 
 
 (provide 'setup-journaling)
