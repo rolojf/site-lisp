@@ -1,3 +1,7 @@
+;;; init-local.el --- Insert description here -*- lexical-binding: t -*-
+;;; Commentary:
+;;; Code:
+
 ;; (setq use-package-enable-imenu-support t) ;; add imenu support for use-package declarations
 ;; (add-to-list 'package-archives '("org" . "https://elpa.nongnu.org/nongnu/") t)
 ;;
@@ -78,3 +82,4 @@
 (setq coding-system-for-write 'utf-8-unix)
 
 (provide 'init-local)
+;;; init-local.el ends here

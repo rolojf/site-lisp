@@ -1,3 +1,7 @@
+;;; setup-dired.el --- Insert description here -*- lexical-binding: t -*-
+;;; Commentary:
+;;; Code:
+
 (require-package 'dired-open)
 ;; Doesn't work as expected!
 ;;(add-to-list 'dired-open-functions #'dired-open-xdg t)
@@ -44,3 +48,4 @@
 ;; (setq async-shell-command-buffer 'new-buffer)
 
 (provide 'setup-dired)
+;;; setup-dired.el ends here
