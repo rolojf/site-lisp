@@ -23,29 +23,29 @@
 ;; (with-eval-after-load 'tramp
 ;;   (add-to-list 'tramp-remote-path 'tramp-own-remote-path))
 
-(with-eval-after-load 'tramp
-  (setq tramp-remote-path
-        '("/.sprite/languages/node/nvm/versions/node/v24.18.0/bin"
-          "/.sprite/languages/go/current/bin"
-          "/.sprite/languages/ruby/rbenv/bin"
-          "/.sprite/languages/ruby/rbenv/shims"
-          "/.sprite/languages/rust/cargo/bin"
-          "/.sprite/languages/bun/bin"
-          "/.sprite/languages/deno/bin"
-          "/.sprite/languages/python/pyenv/bin"
-          "/.sprite/languages/python/pyenv/shims"
-          "/home/sprite/.local/bin"
-          tramp-default-remote-path
-          "/.sprite/bin")))
+;; (with-eval-after-load 'tramp
+;;   (setq tramp-remote-path
+;;         '("/.sprite/languages/node/nvm/versions/node/v24.18.0/bin"
+;;           "/.sprite/languages/go/current/bin"
+;;           "/.sprite/languages/ruby/rbenv/bin"
+;;           "/.sprite/languages/ruby/rbenv/shims"
+;;           "/.sprite/languages/rust/cargo/bin"
+;;           "/.sprite/languages/bun/bin"
+;;           "/.sprite/languages/deno/bin"
+;;           "/.sprite/languages/python/pyenv/bin"
+;;           "/.sprite/languages/python/pyenv/shims"
+;;           "/home/sprite/.local/bin"
+;;           tramp-default-remote-path
+;;           "/.sprite/bin")))
 
-(defconst my-sprite-tercero-path
-  "/ssh:sprite@localhost#4000:/home/sprite/"
-  "Ruta TRAMP al Sprite tercero.")
+;; (defconst my-sprite-tercero-path
+;;   "/ssh:sprite@localhost#4000:/home/sprite/"
+;;   "Ruta TRAMP al Sprite tercero.")
 
-(defun my-tercero ()
-  "Abrir el directorio principal del Sprite tercero."
-  (interactive)
-  (find-file my-sprite-tercero-path))
+;; (defun my-tercero ()
+;;   "Abrir el directorio principal del Sprite tercero."
+;;   (interactive)
+;;   (find-file my-sprite-tercero-path))
 
 (with-eval-after-load 'pi-coding-agent-ui
   (setq pi-coding-agent-executable
@@ -55,7 +55,7 @@
         )
   )
 
-  ;; (global-set-key (kbd "C-c s 3") #'my-open-sprite-tercero)
+;; (global-set-key (kbd "C-c s 3") #'my-open-sprite-tercero)
 
-  (provide 'setup-agents)
+(provide 'setup-agents)
 ;;; setup-agents.el ends here
