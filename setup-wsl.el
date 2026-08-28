@@ -4,7 +4,11 @@
 
 (require-package 'xclip)
 (xclip-mode 1)
-(global-set-key (kbd "M-ñ") 'set-mark-command)
+;; (global-set-key (kbd "M-ñ") 'set-mark-command)
+
+(require-package 'xclip)
+(xclip-mode 1)
+
 
 (provide 'setup-wsl)
 ;;; setup-wsl.el ends here

@@ -49,10 +49,13 @@
 
 (with-eval-after-load 'pi-coding-agent-ui
   (setq pi-coding-agent-executable
-        '("/.sprite/languages/node/nvm/versions/node/v24.18.0/bin/node"
-          "/.sprite/languages/node/nvm/versions/node/v24.18.0/bin/pi")))
+        '("npx" "-y" "@earendil-works/pi-coding-agent@latest")
+        ;; '("/.sprite/languages/node/nvm/versions/node/v24.18.0/bin/node"
+        ;; "/.sprite/languages/node/nvm/versions/node/v24.18.0/bin/pi")
+        )
+  )
 
-;; (global-set-key (kbd "C-c s 3") #'my-open-sprite-tercero)
+  ;; (global-set-key (kbd "C-c s 3") #'my-open-sprite-tercero)
 
-(provide 'setup-agents)
+  (provide 'setup-agents)
 ;;; setup-agents.el ends here

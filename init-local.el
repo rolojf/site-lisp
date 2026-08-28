@@ -1,3 +1,7 @@
+;;; init-local.el --- Insert description here -*- lexical-binding: t -*-
+;;; Commentary:
+;;; Code:
+
 ;; (setq use-package-enable-imenu-support t) ;; add imenu support for use-package declarations
 ;; (add-to-list 'package-archives '("org" . "https://elpa.nongnu.org/nongnu/") t)
 ;;
@@ -29,7 +33,7 @@
 (require 'setup-journaling)
 ;; (require 'setup-gleam)
 (require 'setup-wsl)
-(require 'setup-remote)
+;; (require 'setup-remote)
 ;; (require 'setup-pass)
 ;; (require 'setup-origami)
 ;; (require 'setup-atomic)
@@ -78,3 +82,4 @@
 (setq coding-system-for-write 'utf-8-unix)
 
 (provide 'init-local)
+;;; init-local.el ends here

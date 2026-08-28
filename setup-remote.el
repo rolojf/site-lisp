@@ -27,8 +27,8 @@
 ;; Terminal clipboard integration (if your SSH setup supports OSC 52)
 ;; (setq select-enable-clipboard t)
 
-(require-package 'clipetty)
-(global-clipetty-mode)
+;; (require-package 'clipetty)
+;; (global-clipetty-mode)
 
 
 (provide 'setup-remote)
