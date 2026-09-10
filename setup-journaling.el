@@ -568,6 +568,19 @@ una vez procesado: x=omitido, c=copiado a existente, n=copiado a nuevo,
 t=copiado vía match de tag/filetag, u=estado actualizado en PRIADS por
 match de título, g=programado (PROG copiado a LUEGO).")
 
+(defcustom my-referir-ignored-tags '("journal" "chulet" "adm" "alf" "techo")
+  "Tags que `my-referir-pendientes' ignora al buscar un PRIADS destino.
+Estos tags tampoco se muestran en la pregunta de confirmación.  Agrega o
+quita strings de esta lista para ajustar el comportamiento."
+  :type '(repeat string)
+  :group 'org)
+
+(defun my--referir-relevant-tags (tags)
+  "Return TAGS without workflow tags or `my-referir-ignored-tags'."
+  (seq-difference tags
+                  (append my--referir-tags my-referir-ignored-tags)
+                  #'string=))
+
 (defun my--referir-already-tagged-p ()
   "Return non-nil if the headline at point already carries one of
 `my--referir-tags' as a local tag."
@@ -649,10 +662,13 @@ entries in the same run see them as candidates."
        ((my--referir-already-tagged-p) :already)
        (t
         (let* ((title (org-get-heading t t t t))
-               (local-tags (seq-difference (org-get-tags nil t)
-                                           my--referir-tags
-                                           #'string=))
-               (prompt-tags (org-get-tags nil nil))
+               ;; Solo estos tags participan en el match automático.  Si el
+               ;; resultado apunta a un único archivo, se copia antes de la
+               ;; pregunta de confirmación.
+               (local-tags (my--referir-relevant-tags
+                            (org-get-tags nil t)))
+               (prompt-tags (my--referir-relevant-tags
+                             (org-get-tags nil nil)))
                (prompt-title (concat (org-get-heading t nil t t)
                                      (when prompt-tags
                                        (concat " :"
@@ -742,8 +758,9 @@ El alcance depende de la posición del punto al invocar el comando
 Cada tarea cerrada (DONE, KILL) o aplazada (SDM) que aún no lleve uno de
 `my--referir-tags' se enruta por `my--referir-process-entry':
 
-1. Tag local que matchea las keywords de exactamente un PRIADS activo →
-   copia bajo `* completadas' y marca `:t:'.
+1. Después de quitar `my-referir-ignored-tags', un tag local que matchea
+   las keywords de exactamente un PRIADS activo → copia automáticamente
+   bajo `* completadas', sin preguntar, y marca `:t:'.
 2. Preguntar `¿Quiere referir tarea ...?'; si no, marca `:x:`.
 3. Preguntar la acción de título: `(crear nuevo PRIADS)', buscar en todos
    los PRIADS activos, o elegir un archivo específico.  Si encuentra un
