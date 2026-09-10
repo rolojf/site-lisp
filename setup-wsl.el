@@ -2,12 +2,13 @@
 ;;; Commentary:
 ;;; Code:
 
-(require-package 'xclip)
-(xclip-mode 1)
+;; (require-package 'xclip)
+;; (xclip-mode 1)
 ;; (global-set-key (kbd "M-ñ") 'set-mark-command)
 
-(require-package 'xclip)
-(xclip-mode 1)
+(setq select-active-regions nil
+      select-enable-primary nil
+      select-enable-clipboard t)
 
 
 (provide 'setup-wsl)
