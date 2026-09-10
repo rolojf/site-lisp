@@ -16,9 +16,9 @@
 ;; claude plugins marketplaces update xenodium-emacs-skills
 ;; para actualizar skills
 
-(require-package 'pi-coding-agent)
+(require-package 'pilish)
 
-(defalias 'pi 'pi-coding-agent)
+;; (defalias 'pi 'pi-coding-agent)
 
 ;; (with-eval-after-load 'tramp
 ;;   (add-to-list 'tramp-remote-path 'tramp-own-remote-path))

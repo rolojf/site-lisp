@@ -10,6 +10,16 @@
       select-enable-primary nil
       select-enable-clipboard t)
 
+(defun a1rolo-wslg-clipboard-paste ()
+  "Obtener primero el texto UTF-8 ofrecido por WSLg."
+  (or (gui-get-selection
+       'CLIPBOARD
+       (intern "text/plain;charset=utf-8"))
+      (gui-selection-value)))
+
+(when (eq window-system 'pgtk)
+  (setq interprogram-paste-function
+        #'a1rolo-wslg-clipboard-paste))
 
 (provide 'setup-wsl)
 ;;; setup-wsl.el ends here
