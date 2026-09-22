@@ -33,6 +33,7 @@
 (require 'setup-journaling)
 ;; (require 'setup-gleam)
 (require 'setup-wsl)
+(require 'setup-markdown)
 ;; (require 'setup-remote)
 ;; (require 'setup-pass)
 ;; (require 'setup-origami)
