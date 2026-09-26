@@ -10,7 +10,6 @@
 
 (require 'setup-denote)
 (require 'cl-lib)
-(require 'seq) ;; Required for seq-find
 
 (when (maybe-require-package 'denote-journal)
   (with-eval-after-load 'denote
@@ -23,324 +22,87 @@
 
 (setq denote-journal-directory (expand-file-name "diario" denote-directory))
 
-(defconst my--programados-file
-  (expand-file-name "LUEGO.org" denote-journal-directory)
-  "Holding file in diario/ for COLD (scheduled-for-later) tasks.
-`my-referir-pendientes' parks COLD headlines here under `* TASKS'; a new
-day's `my-denote-journal-today' pulls back the ones whose SCHEDULED date
-has arrived.  Created lazily on first use.")
+(require 'diario-commands)
+(require 'diario-priad-commands)
+
+;; Keep the prior referir workflow markers out of the one shared association
+;; policy used by focus, import, and referring.
+(setq my-diario-ignored-tags
+      (delete-dups (append my-diario-ignored-tags
+                           '("chulet" "adm" "alf" "techo"))))
 
 
 ;; --- FUNCTION DEFINITIONS ---
 ;; All custom functions are defined here, before they are called by other code.
 
 (defun journals_to_org_agenda ()
-  "Get journal files from the last month for Org Agenda."
-  (let* ((min-date (format-time-string "%Y%m%d"
-                                       (encode-time
-                                        (decoded-time-add (parse-time-string
-                                                           (calendar-date-string
-                                                            (calendar-current-date)))
-                                                          (make-decoded-time :month (- 1))))))
-         (all-journals (sort
-                        (directory-files denote-journal-directory nil "^[0-9].*_journal.*org$")
-                        #'string>))
-         (out-list nil))
-    (dolist (journal all-journals out-list)
-      (when (string> (substring journal 0 8) min-date)
-        (push (concat denote-journal-directory journal) out-list)))))
+  "Return only the current diario and LUEGO for the active-work agenda."
+  (my-diario-agenda-files))
 
 (defun journal-day-exists-p (target)
-  "Check if a journal for a given day already exists. Target is papayaMMDD."
-  (file-expand-wildcards
-   (file-name-concat denote-journal-directory
-                     (concat target "*_journal*.org"))))
+  "Return the absolute diario paths for YYYYMMDD TARGET."
+  (my-dc--day-files target))
 
 (defun find-previous-journal ()
-  "Find the file name of the most recent journal before today."
-  (let* ((today (format-time-string "%Y%m%d"))
-         (all-journals (sort (directory-files denote-journal-directory nil "^[0-9].*_journal.*org$") #'string>))
-         (previous-journal (seq-find (lambda (journal) (string< (substring journal 0 8) today))
-                                     all-journals)))
-    (if previous-journal
-        (progn
-          (message "Journaling: Found previous journal: %s" previous-journal)
-          previous-journal)
-      (message "Journaling: No previous journal file found."))))
+  "Return the latest prior diario's filename, if any."
+  (when-let* ((path (my-dc--previous (format-time-string "%Y%m%d"))))
+    (file-name-nondirectory path)))
 
 (defun my-refile-tasks (file)
-  "Refile every level-2 TODO/WAIT/NEXT subtree in the current buffer to FILE under '* TASKS'.
-Headlines in other states (DONE, KILL, SDM, COLD, etc.) are left behind."
-  (interactive "FFile to refile tasks to: ")
-  ;; This is the definitive fix. We save the original values of the
-  ;; dynamic variables, but ONLY if they are currently bound. This
-  ;; avoids the `Symbol's value as variable is void' error.
-  (let ((original-archive-location (if (boundp 'org-archive-location) org-archive-location))
-        (original-save-context-info (if (boundp 'org-archive-save-context-info) org-archive-save-context-info)))
-    (unwind-protect
-        (progn
-          (setq org-archive-location (concat file "::* TASKS"))
-          (setq org-archive-save-context-info nil)
-          ;; Ensure the target file has a "* TASKS" heading.
-          (with-current-buffer (find-file-noselect file)
-            (goto-char (point-min))
-            (unless (re-search-forward "^\\* TASKS" nil t)
-              (goto-char (point-max))
-              (unless (bolp) (insert "\n"))
-              (insert "* TASKS\n")))
-          ;; Now, in the current buffer (the old journal), refile the tasks.
-          (goto-char (point-max))
-          (while (re-search-backward "^\\*\\* \\(TODO\\|WAIT\\|PROG\\|NEXT\\)" nil t)
-            (org-archive-subtree)))
-      ;; This part runs no matter what, restoring the original values.
-      (setq org-archive-location original-archive-location)
-      (setq org-archive-save-context-info original-save-context-info))))
+  "Delegate an explicit source-to-FILE rollover to the verified engine."
+  (interactive "FDiario destino: ")
+  (unless (and (buffer-file-name) (my-dc--journal-p (buffer-file-name))
+               (my-dc--journal-p file))
+    (user-error "Abra un diario fuente y elija otro diario existente"))
+  (my-dc--layout (buffer-file-name))
+  (unless (my-diario--fresh-p (my-diario--read file))
+    (my-dc--layout file))
+  (my-diario-roll (expand-file-name (buffer-file-name)) (expand-file-name file)
+                  (my-dc--later) (substring (file-name-nondirectory file) 0 8)))
 
 (defun move-todos (todays-journal-path)
-  "Move all TODOs from the previous day's journal to TODAYS-JOURNAL-PATH."
-  (let ((previous-journal-name (find-previous-journal)))
-    (if previous-journal-name
-        (let ((previous-journal-path (file-name-concat denote-journal-directory previous-journal-name)))
-          (if (and todays-journal-path (file-exists-p previous-journal-path))
-              (progn
-                (message "Journaling: Moving tasks from '%s' to '%s'"
-                         (file-name-nondirectory previous-journal-path)
-                         (file-name-nondirectory todays-journal-path))
-                (with-current-buffer (find-file-noselect previous-journal-path)
-                  (my-refile-tasks todays-journal-path))
-                (kill-buffer (file-name-nondirectory previous-journal-path)))
-            (message "Journaling: Could not move tasks. Target: %s. Previous: %s (exists: %s)"
-                     todays-journal-path
-                     previous-journal-path
-                     (file-exists-p previous-journal-path))))
-      (message "Journaling: No previous journal found to move tasks from."))))
+  "Delegate processing of TODAYS-JOURNAL-PATH without a second rollover."
+  (my-dc--run (expand-file-name todays-journal-path)
+              (substring (file-name-nondirectory todays-journal-path) 0 8)
+              'existing))
 
 (defun find-most-recent-journal ()
-  "Find the file name of the most recent journal."
-  (let* ((all-journals (sort (directory-files denote-journal-directory t "^[0-9].*_journal.*org$") #'string>)) ; Changed nil to t for full path
-         (most-recent-journal (car all-journals)))
-    (if most-recent-journal
-        (progn
-          (message "Journaling: Found most recent journal: %s" most-recent-journal)
-          most-recent-journal)
-      (message "Journaling: No journal file found."))))
+  "Find the current working diario's absolute path, if any."
+  (my-diario-current))
 
 (defun set-org-refile-targets-to-most-recent-journal ()
-  "Sets `org-refile-targets` to the most recent journal file."
+  "Delegate native Org refile destinations to the managed diario lists."
   (interactive)
-  (let ((recent-journal-file (find-most-recent-journal)))
-    (when recent-journal-file
-      ;; Corrected structure: '(STRING) instead of '((STRING))
-      (setq org-refile-targets `((,recent-journal-file . (:regexp . "TASKS"))))
-      (message "Refile targets set to: %s" (car org-refile-targets)))))
+  (my-diario-refile-targets))
 
 (add-hook 'org-agenda-mode-hook #'set-org-refile-targets-to-most-recent-journal)
+(add-hook 'org-mode-hook #'my-diario-activate-focus)
 
 
 (defun my--programados-pull-due (target-journal target-date)
-  "Move due LUEGO tasks into TARGET-JOURNAL's `* TASKS'.
-A task is due when its SCHEDULED date is on or before TARGET-DATE (a
-\"YYYYMMDD\" string).  The subtree is moved out of LUEGO (not
-copied) and keeps its PROG state.  No-op when `my--programados-file' does
-not exist.  Returns the number of tasks moved."
-  (when (file-exists-p my--programados-file)
-    (let ((original-archive-location
-           (if (boundp 'org-archive-location) org-archive-location))
-          (original-save-context-info
-           (if (boundp 'org-archive-save-context-info)
-               org-archive-save-context-info))
-          (moved 0))
-      (unwind-protect
-          (progn
-            (setq org-archive-location (concat target-journal "::* TASKS"))
-            (setq org-archive-save-context-info nil)
-            ;; Ensure the target journal has a `* TASKS' heading.
-            (with-current-buffer (find-file-noselect target-journal)
-              (org-with-wide-buffer
-               (goto-char (point-min))
-               (unless (re-search-forward "^\\* TASKS" nil t)
-                 (goto-char (point-max))
-                 (unless (bolp) (insert "\n"))
-                 (insert "* TASKS\n"))))
-            ;; Move every due level-2 task out of LUEGO.  Iterate back
-            ;; to front so archiving a subtree never shifts pending matches.
-            (with-current-buffer (find-file-noselect my--programados-file)
-              (org-with-wide-buffer
-               (goto-char (point-max))
-               (while (re-search-backward "^\\*\\* " nil t)
-                 (let ((sched (org-get-scheduled-time (point))))
-                   (when (and sched
-                              (not (string< target-date
-                                            (format-time-string "%Y%m%d" sched))))
-                     (org-archive-subtree)
-                     (cl-incf moved)))))
-              (save-buffer)))
-        (setq org-archive-location original-archive-location)
-        (setq org-archive-save-context-info original-save-context-info))
-      (when (> moved 0)
-        (message "FRIOS: %d tarea(s) traída(s) a %s"
-                 moved (file-name-nondirectory target-journal)))
-      moved)))
+  "Delegate due retrieval into TARGET-JOURNAL on TARGET-DATE to the engine."
+  (plist-get (my-diario-return (expand-file-name target-journal)
+                               (my-dc--later) target-date)
+             :returned))
 
 (defun my-denote-journal-today ()
-  "Create or find today's journal and move tasks from the previous day."
+  "Create or open today's diario through the three-list/COLD commands."
   (interactive)
-  (let* ((today (format-time-string "%Y%m%d"))
-         (existing-file (car (journal-day-exists-p today)))
-         (todays-journal-path
-          (if existing-file
-              ;; If file exists, get its full path
-              existing-file
-            ;; Otherwise, create a new one and get its path
-            (denote
-             (format-time-string "%Yw%W-%a %e %b") ; Title format
-             '("journal")
-             nil                        ; file-type
-             denote-journal-directory))))
-
-    ;; Now we have the definitive path to today's journal.
-    ;; Ensure the buffer is open and has the required structure.
-    (with-current-buffer (find-file-noselect todays-journal-path)
-      (when (not existing-file)
-        ;; It's a new file, so insert the template.
-        (save-buffer)))
-
-    ;; Now that today's journal is guaranteed to exist, move the unfinished tasks.
-    (move-todos todays-journal-path)
-
-    ;; Pull back any parked PROG task whose scheduled date has arrived.
-    (my--programados-pull-due todays-journal-path today)
-
-    ;; If we created a new file, refresh the agenda files list.
-    (unless existing-file
-      (setq org-agenda-files (journals_to_org_agenda)))
-
-    ;; Finally, make sure the user is in today's journal buffer.
-    (switch-to-buffer (find-file-noselect todays-journal-path)))
-
-  ;; After all journal operations are complete, update the refile target.
-  (set-org-refile-targets-to-most-recent-journal)
-  )
+  (my-diario-today))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; COPIAR A TAREAS DIARIAS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun my--priads-file-p (path)
-  "Return non-nil if PATH is a PRIADS .org file directly under `denote-directory'.
-Subdirectories (e.g. diario/) and .org_archive files are excluded."
-  (and path
-       (string= (file-name-extension path) "org")
-       (string= (file-name-as-directory
-                 (file-name-directory (expand-file-name path)))
-                (file-name-as-directory (expand-file-name denote-directory)))))
-
-(defun my-copiar-a-tareas-diarias--do-copy ()
-  "Copy every TODO subtree in the current buffer to the most recent diario.
-Skips entries whose headline already exists in the diario and entries
-whose ancestor headline is itself in the TODO state.
-Before copying, tags set locally on the immediate parent headline are
-added to the entry (and kept in this file, which is saved afterward).
-When an entry already exists in the diario, it is not duplicated: any
-missing tags are added in place to the existing diario entry instead.
-Returns `no-todos' or a cons (COPIED . SKIPPED).  Raises `user-error'
-when the user cancels at the save prompt or when no diario exists."
-  (unless (buffer-file-name)
-    (user-error "Este buffer no visita un archivo"))
-  (when (buffer-modified-p)
-    (if (y-or-n-p "El archivo no está grabado. ¿Realmente quieres copiar tareas a diarias, este proceso? ")
-        (save-buffer)
-      (user-error "Cancelado")))
-  (let ((target (find-most-recent-journal)))
-    (unless target
-      (user-error "No se encontró archivo diario reciente"))
-    (let ((existing-titles (make-hash-table :test 'equal))
-          (rfloc nil)
-          (copied 0)
-          (skipped 0))
-      ;; Prepare diario: ensure `* TASKS', gather existing titles, build RFLOC.
-      (with-current-buffer (find-file-noselect target)
-        (org-with-wide-buffer
-         (goto-char (point-min))
-         (unless (re-search-forward "^\\* TASKS" nil t)
-           (goto-char (point-max))
-           (unless (bolp) (insert "\n"))
-           (insert "* TASKS\n"))
-         (goto-char (point-min))
-         (re-search-forward "^\\* TASKS")
-         (setq rfloc (list "TASKS" (buffer-file-name) nil
-                           (line-beginning-position)))
-         (org-map-entries
-          (lambda ()
-            (puthash (org-get-heading t t t t) (point-marker) existing-titles)))))
-      ;; Iterate TODO entries in the source buffer.
-      (org-map-entries
-       (lambda ()
-         (let* ((title (org-get-heading t t t t))
-                (has-todo-ancestor
-                 (save-excursion
-                   (catch 'found
-                     (while (org-up-heading-safe)
-                       (when (equal (org-get-todo-state) "TODO")
-                         (throw 'found t)))
-                     nil)))
-                (parent-tags
-                 (save-excursion
-                   (when (org-up-heading-safe)
-                     (org-get-tags nil t))))
-                (merged-tags (delete-dups
-                              (append (org-get-tags nil t) parent-tags))))
-           (cond
-            (has-todo-ancestor)              ; pulled in by an ancestor copy
-            ((gethash title existing-titles)
-             ;; Already in the diario: don't duplicate.  Persist the parent's
-             ;; tags on the source child and add only the missing tags to the
-             ;; existing diario entry.
-             (when parent-tags
-               (org-set-tags merged-tags))
-             (let ((m (gethash title existing-titles)))
-               (when (and (markerp m) merged-tags)
-                 (with-current-buffer (marker-buffer m)
-                   (save-excursion
-                     (goto-char m)
-                     (let* ((cur (org-get-tags nil t))
-                            (new (delete-dups (append cur merged-tags))))
-                       (unless (equal cur new)
-                         (org-set-tags new)))))))
-             (cl-incf skipped))
-            (t
-             (when parent-tags
-               (org-set-tags merged-tags))
-             (let ((org-refile-keep t)
-                   (org-log-refile nil))
-               (org-refile nil nil rfloc "Copy"))
-             (puthash title t existing-titles)
-             (cl-incf copied)))))
-       "/TODO" 'file)
-      (when (buffer-modified-p) (save-buffer))
-      (with-current-buffer (find-file-noselect target)
-        (save-buffer))
-      (if (and (= copied 0) (= skipped 0))
-          'no-todos
-        (message "Copiadas %d tareas, omitidas %d duplicadas hacia %s"
-                 copied skipped (file-name-nondirectory target))
-        (cons copied skipped)))))
-
-(defun my-copiar-a-tareas-diarias ()
-  "Copy TODO tasks from the current PRIADS buffer to the most recent diario, then kill the buffer."
-  (interactive)
-  (unless (my--priads-file-p (buffer-file-name))
-    (user-error "Este buffer no visita un archivo PRIADS"))
-  (my-copiar-a-tareas-diarias--do-copy)
-  (kill-buffer (current-buffer)))
+(defun my-copiar-a-tareas-diarias (&optional policy)
+  "Import new PRIAD TODO roots into today's prepared diario, then close.
+With a prefix, deliberately repeat exports previously sent to another day."
+  (interactive (list (if current-prefix-arg 'repeat 'new-only)))
+  (my-dpc-copy policy))
 
 (defun my-copiar-a-tareas-diarias--maybe-on-kill ()
-  "Run the copy-to-diario workflow when killing a PRIADS buffer.
-Returns t so the kill proceeds normally; a `user-error' from
-`my-copiar-a-tareas-diarias--do-copy' aborts the kill."
-  (when (my--priads-file-p (buffer-file-name))
-    (my-copiar-a-tareas-diarias--do-copy))
-  t)
+  "Delegate user-initiated PRIAD close imports to the guarded bridge."
+  (my-dpc-maybe-on-kill))
 
 (add-hook 'kill-buffer-query-functions
           #'my-copiar-a-tareas-diarias--maybe-on-kill)
@@ -353,469 +115,17 @@ Returns t so the kill proceeds normally; a `user-error' from
   ;; (define-key map (kbd "C-c n o") #'my-denote-journal-date))
 
 (with-eval-after-load 'org
-  (setq org-agenda-files '("~/newkb/diario")))
+  (my-diario-refresh-agenda)
+  (my-diario-refile-targets))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; REFERIR PENDIENTES
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defconst my--priads-active-signature-regexp
-  "\\`[0-9]\\{8\\}T[0-9]\\{4\\}\\([0-9]\\{2\\}\\)?==[pri]--.*\\.org\\'"
-  "Regex matching active PRIADS Denote filenames at the root of `denote-directory'.
-Covers proyectos (p), responsabilidades (r), intereses (i).  Excludes
-subdirectories such as diario/, on-hold (sp/sr/si), archived
-(ap/ar/ai/ad), datos (d), some-day-maybe (s), journals and legacy files
-without signature.")
-
-(defun my--priads-active-file-p (file)
-  "Return non-nil when FILE is an active PRIADS root .org file.
-Active PRIADS are only files directly under `denote-directory' whose
-filename signature is p, r, or i.  This excludes diario/ and every other
-subdirectory."
-  (let* ((file (and file (expand-file-name file)))
-         (root (file-name-as-directory (expand-file-name denote-directory)))
-         (relative (and file (file-relative-name file root))))
-    (and file
-         (file-in-directory-p file root)
-         relative
-         (not (string-match-p "/" relative))
-         (string= (file-name-extension file) "org")
-         (string-match-p my--priads-active-signature-regexp relative))))
-
-(defun my--priads-active-files ()
-  "Return absolute paths of active PRIADS files directly under `denote-directory'.
-Only files with signature p, r, or i are included.  Use Denote's file
-listing, but with an anchored filename regexp so subdirectories like
-diario/ cannot match."
-  (seq-filter #'my--priads-active-file-p
-              (denote-directory-files my--priads-active-signature-regexp
-                                      nil t)))
-
-(defconst my--referir-create-priads-choice "(crear nuevo PRIADS)"
-  "Choice label used by `my-referir-pendientes' to create a PRIADS.")
-
-(defconst my--referir-all-priads-choice "(buscar en todos los PRIADS activos)"
-  "Choice label used by `my-referir-pendientes' to search all PRIADS.")
-
-(defun my--referir-read-title-action (candidate-files)
-  "Ask the third-step action for `my-referir-pendientes'.
-The user can create a new PRIADS, search all active PRIADS, or select one
-specific CANDIDATE-FILES entry.  Return the selected string."
-  (let ((relative-files (mapcar (lambda (f)
-                                  (file-relative-name f denote-directory))
-                                candidate-files)))
-    (completing-read
-     "Referir/buscar tarea por título: "
-     (append (list my--referir-create-priads-choice
-                   my--referir-all-priads-choice)
-             relative-files)
-     nil t nil nil my--referir-all-priads-choice)))
-
-(defun my--referir-find-headline (title &optional files)
-  "Search FILES for a headline whose text equals TITLE.
-Return (FILE . POSITION) of the first match, or nil if none found.
-Buffers opened only for the search are killed before returning.  When
-FILES is nil, search all active PRIADS files."
-  (let* ((raw-files (or files (my--priads-active-files)))
-         (bad-files (seq-remove #'my--priads-active-file-p raw-files))
-         (files (seq-filter #'my--priads-active-file-p raw-files))
-         (result nil))
-    (when bad-files
-      (user-error "Búsqueda cancelada: destino no-PRIADS detectado: %s"
-                  (mapconcat (lambda (f)
-                               (file-relative-name f denote-directory))
-                             bad-files ", ")))
-    (catch 'found
-      (dolist (file files)
-        (let* ((existing (get-file-buffer file))
-               (buf (or existing (find-file-noselect file))))
-          (unwind-protect
-              (with-current-buffer buf
-                (let ((pos
-                       (org-with-wide-buffer
-                        (goto-char (point-min))
-                        (catch 'hit
-                          (while (re-search-forward org-heading-regexp nil t)
-                            (when (equal (my--referir-strip-date
-                                          (org-get-heading t t t t))
-                                         title)
-                              (throw 'hit (line-beginning-position))))
-                          nil))))
-                  (when pos
-                    (setq result (cons file pos))
-                    (throw 'found result))))
-            (unless (or existing result)
-              (kill-buffer buf))))))
-    result))
-
-(defun my--referir-update-state (file pos new-state)
-  "In FILE, move to POS and set the TODO state of that headline to NEW-STATE.
-NEW-STATE is the string \"DONE\", \"KILL\", or \"SDM\".  Saves the buffer."
-  (with-current-buffer (find-file-noselect file)
-    (org-with-wide-buffer
-     (goto-char pos)
-     (org-todo new-state))
-    (save-buffer)))
-
-(defun my--referir-copy-subtree (target-file headline &optional append-date)
-  "Copy the current source subtree under `* HEADLINE' in TARGET-FILE.
-Point must be on the source headline when called.  Creates TARGET-FILE
-and the `* HEADLINE' headline if missing.  Skips silently if a headline
-with the same title already exists under `* HEADLINE'.  When APPEND-DATE
-is non-nil, today's inactive timestamp is appended to the copied title
-\(the `* completadas' behavior).  Always saves TARGET-FILE.  Returns t if
-the subtree was copied, nil if skipped as a duplicate."
-  (let* ((title (org-get-heading t t t t))
-         (header-regexp (concat "^\\* " (regexp-quote headline)))
-         (existing-titles (make-hash-table :test 'equal))
-         (rfloc nil))
-    (with-current-buffer (find-file-noselect target-file)
-      (org-with-wide-buffer
-       (goto-char (point-min))
-       (unless (re-search-forward header-regexp nil t)
-         (goto-char (point-max))
-         (unless (bolp) (insert "\n"))
-         (insert "* " headline "\n"))
-       (goto-char (point-min))
-       (re-search-forward header-regexp)
-       (setq rfloc (list headline (buffer-file-name) nil
-                         (line-beginning-position)))
-       (org-back-to-heading t)
-       (let ((end (save-excursion (org-end-of-subtree t t))))
-         (save-excursion
-           (forward-line 1)
-           (while (re-search-forward org-heading-regexp end t)
-             ;; Normaliza quitando el timestamp que esta función anexa, para
-             ;; que el dedupe siga comparando por el título base.
-             (puthash (my--referir-strip-date (org-get-heading t t t t))
-                      t existing-titles))))))
-    (cond
-     ((gethash title existing-titles) nil)
-     (t
-      (let ((org-refile-keep t)
-            (org-log-refile nil))
-        (org-refile nil nil rfloc "Refer"))
-      (with-current-buffer (find-file-noselect target-file)
-        (when append-date
-          ;; Anexar la fecha de hoy al título del headline recién copiado.
-          (org-with-wide-buffer
-           (goto-char (point-min))
-           (re-search-forward header-regexp)
-           (org-back-to-heading t)
-           (let ((end (save-excursion (org-end-of-subtree t t))))
-             (save-excursion
-               (forward-line 1)
-               (catch 'done
-                 (while (re-search-forward org-heading-regexp end t)
-                   (when (equal (org-get-heading t t t t) title)
-                     (org-edit-headline
-                      (concat title " " (my--referir-date-stamp)))
-                     (throw 'done t))))))))
-        (save-buffer))
-      t))))
-
-(defun my--referir-copy-to-completadas (target-file)
-  "Copy the current source subtree to `* completadas' in TARGET-FILE.
-Thin wrapper over `my--referir-copy-subtree' preserving the historical
-behavior: appends today's date stamp to the copied title."
-  (my--referir-copy-subtree target-file "completadas" t))
-
-(defun my--referir-copy-to-new-priads (title)
-  "Create a PRIADS with `denote' and copy the current task there.
-Point must be on the source headline.  TITLE is used only for messages.
-Return `:copied' or `:skipped'."
-  (let* ((src-buf (current-buffer))
-         (src-pt (point))
-         (target
-          (condition-case err
-              (call-interactively #'denote)
-            (quit
-             (message "denote abortado por C-g")
-             nil)
-            (error
-             (message "Error en denote: %S" err)
-             nil))))
-    (when (and (stringp target)
-               (find-buffer-visiting target))
-      (with-current-buffer (find-buffer-visiting target)
-        (save-buffer)))
-    (with-current-buffer src-buf
-      (save-excursion
-        (goto-char src-pt)
-        (cond
-         ((not (stringp target))
-          (message "→ \"%s\": no se creó archivo (saltado)" title)
-          :skipped)
-         ((not (file-exists-p target))
-          (message "→ \"%s\": archivo %s no existe en disco (saltado)"
-                   title target)
-          :skipped)
-         ((my--referir-copy-to-completadas target)
-          (push target my--referir-created-priads)
-          (my--referir-add-tag "n")
-          (message "✚ \"%s\": copiado a nuevo PRIADS %s"
-                   title
-                   (file-name-nondirectory target))
-          :copied)
-         (t
-          (message "→ \"%s\": copy-to-completadas falló (saltado)"
-                   title)
-          :skipped))))))
-
-(defconst my--referir-tags '("x" "c" "n" "t" "u" "g")
-  "Tags con los que `my-referir-pendientes' marca el heading fuente
-una vez procesado: x=omitido, c=copiado a existente, n=copiado a nuevo,
-t=copiado vía match de tag/filetag, u=estado actualizado en PRIADS por
-match de título, g=programado (PROG copiado a LUEGO).")
-
-(defcustom my-referir-ignored-tags '("journal" "chulet" "adm" "alf" "techo")
-  "Tags que `my-referir-pendientes' ignora al buscar un PRIADS destino.
-Estos tags tampoco se muestran en la pregunta de confirmación.  Agrega o
-quita strings de esta lista para ajustar el comportamiento."
-  :type '(repeat string)
-  :group 'org)
-
-(defun my--referir-relevant-tags (tags)
-  "Return TAGS without workflow tags or `my-referir-ignored-tags'."
-  (seq-difference tags
-                  (append my--referir-tags my-referir-ignored-tags)
-                  #'string=))
-
-(defun my--referir-already-tagged-p ()
-  "Return non-nil if the headline at point already carries one of
-`my--referir-tags' as a local tag."
-  (seq-intersection (org-get-tags nil t) my--referir-tags #'string=))
-
-(defun my--referir-add-tag (tag)
-  "Add TAG as a local tag on the headline at point (idempotent)."
-  (unless (member tag (org-get-tags nil t))
-    (org-toggle-tag tag 'on)))
-
-(defun my--file-keywords-as-list (file)
-  "Return the Denote filename keywords of FILE as a list of strings."
-  (when-let* ((kws (denote-retrieve-filename-keywords file)))
-    (split-string kws "_" t)))
-
-(defun my--referir-tag-matches (local-tags candidate-files)
-  "Return the list of CANDIDATE-FILES whose filename keywords intersect
-LOCAL-TAGS.  May return zero, one, or many files."
-  (seq-filter
-   (lambda (f)
-     (seq-intersection (my--file-keywords-as-list f)
-                       local-tags
-                       #'string=))
-   candidate-files))
-
-(defun my--referir-date-stamp ()
-  "Fecha de hoy como timestamp inactivo de Org, p.ej. \"[2026-05-29 vie]\".
-Equivale a lo que inserta `C-c C-.' aceptando la fecha por defecto."
-  (with-temp-buffer
-    (org-mode)
-    (org-insert-timestamp (current-time) nil t)
-    (buffer-string)))
-
-(defun my--referir-strip-date (title)
-  "Quita un timestamp inactivo final \" [YYYY-MM-DD ...]\" de TITLE, si lo trae.
-Permite que el dedupe de `my--referir-copy-to-completadas' compare por el
-título base aunque ya se haya anexado la fecha en una corrida previa."
-  (replace-regexp-in-string
-   " *\\[[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}[^]]*\\]\\'" "" title))
-
-(defvar my--referir-created-priads nil
-  "PRIADS recién creados durante la corrida actual de `my-referir-pendientes'.
-Se enlaza dinámicamente en el comando para que las entradas posteriores los
-vean como candidatos.")
-
-(defun my--referir-process-entry (_skip-omit)
-  "Refer the closed/SDM task at point to an active PRIADS.
-Point must be on the source headline.  Returns one of the keywords
-`:already', `:copied', `:skipped', `:updated', or nil when the entry is
-not a DONE/KILL/SDM task.
-
-After the automatic tag/filetag route, always ask positively whether to
-refer the task before looking for a matching task title or prompting for a
-destination.  `_skip-omit' is kept only for compatibility with existing
-call sites.
-
-Newly created PRIADS are pushed onto `my--referir-created-priads' so later
-entries in the same run see them as candidates."
-  (let ((state (org-get-todo-state)))
-    (cond
-     ((equal state "COLD")
-      (cond
-       ((my--referir-already-tagged-p) :already)
-       (t
-        ;; Toda tarea PROG debe llevar fecha: si no la trae, programar a una
-        ;; semana de hoy para que la corrida diaria pueda traerla de vuelta.
-        (unless (org-get-scheduled-time (point))
-          (let ((org-log-reschedule nil))
-            (org-schedule nil (format-time-string
-                               "%Y-%m-%d"
-                               (time-add (current-time) (days-to-time 7))))))
-        (my--referir-copy-subtree my--programados-file "TASKS" nil)
-        (my--referir-add-tag "g")
-        (message "⏳ \"%s\": programado a LUEGO"
-                 (org-get-heading t t t t))
-        :programado)))
-     ((member state '("DONE" "KILL" "SDM"))
-      (cond
-       ((my--referir-already-tagged-p) :already)
-       (t
-        (let* ((title (org-get-heading t t t t))
-               ;; Solo estos tags participan en el match automático.  Si el
-               ;; resultado apunta a un único archivo, se copia antes de la
-               ;; pregunta de confirmación.
-               (local-tags (my--referir-relevant-tags
-                            (org-get-tags nil t)))
-               (prompt-tags (my--referir-relevant-tags
-                             (org-get-tags nil nil)))
-               (prompt-title (concat (org-get-heading t nil t t)
-                                     (when prompt-tags
-                                       (concat " :"
-                                               (mapconcat #'identity
-                                                          prompt-tags ":")
-                                               ":"))))
-               (candidates (delete-dups
-                            (seq-filter #'my--priads-active-file-p
-                                        (append my--referir-created-priads
-                                                (my--priads-active-files)))))
-               (tag-matches (when local-tags
-                              (my--referir-tag-matches local-tags
-                                                       candidates)))
-               (tag-hit (when (= (length tag-matches) 1)
-                          (car tag-matches))))
-          (cond
-           ;; 1. Match único por tag/filetag.
-           (tag-hit
-            (if (my--referir-copy-to-completadas tag-hit)
-                (progn (my--referir-add-tag "t")
-                       (message "✚ \"%s\": copiado vía tag a %s"
-                                prompt-title
-                                (file-name-nondirectory tag-hit))
-                       :copied)
-              :skipped))
-           ;; 2–3. Preguntar positivamente y elegir qué hacer.  Si se busca
-           ;;      en todos los PRIADS y no se encuentra, volver a preguntar
-           ;;      para esta misma tarea.
-           (t
-            (cl-loop
-             for res =
-             (cond
-              ((not (y-or-n-p (format "¿Quiere referir tarea \"%s\"? "
-                                      prompt-title)))
-               (my--referir-add-tag "x")
-               :skipped)
-              (t
-               (let ((choice (condition-case nil
-                                 (my--referir-read-title-action candidates)
-                               (quit nil))))
-                 (cond
-                  ((null choice)
-                   (my--referir-add-tag "x")
-                   :skipped)
-                  ((string= choice my--referir-create-priads-choice)
-                   (my--referir-copy-to-new-priads title))
-                  (t
-                   (let* ((selected-files
-                           (unless (string= choice my--referir-all-priads-choice)
-                             (list (expand-file-name choice denote-directory))))
-                          (hit (my--referir-find-headline title selected-files)))
-                     (cond
-                      (hit
-                       (my--referir-update-state (car hit) (cdr hit) state)
-                       (my--referir-add-tag "u")
-                       (message "↻ \"%s\": estado actualizado en %s"
-                                title
-                                (file-name-nondirectory (car hit)))
-                       :updated)
-                      (selected-files
-                       (if (my--referir-copy-to-completadas (car selected-files))
-                           (progn (my--referir-add-tag "c")
-                                  :copied)
-                         :skipped))
-                      (t
-                       (read-key
-                        (format "No se encontró \"%s\" en los PRIADS activos; presiona una tecla para volver a elegir."
-                                prompt-title))
-                       :not-found))))))))
-             until (not (eq res :not-found))
-             finally return res))))))))))
-
 (defun my-referir-pendientes ()
-  "Refer DONE/KILL/SDM tasks to active PRIADS files, según dónde esté el cursor.
-
-El alcance depende de la posición del punto al invocar el comando
-(`C-c n e'):
-
-- En un headline CON headlines hijos → se procesa el subárbol (la raíz y
-  sus descendientes), y por cada tarea cerrada se pregunta positivamente
-  si se quiere referir.
-- En un headline HOJA (sin descendientes), o en el CUERPO de un headline →
-  se procesa solo ese headline, con la misma pregunta positiva antes de
-  buscar coincidencias por título.
-- Antes del primer encabezado (fuera de todo headline) → no se procesa nada.
-
-Cada tarea cerrada (DONE, KILL) o aplazada (SDM) que aún no lleve uno de
-`my--referir-tags' se enruta por `my--referir-process-entry':
-
-1. Después de quitar `my-referir-ignored-tags', un tag local que matchea
-   las keywords de exactamente un PRIADS activo → copia automáticamente
-   bajo `* completadas', sin preguntar, y marca `:t:'.
-2. Preguntar `¿Quiere referir tarea ...?'; si no, marca `:x:`.
-3. Preguntar la acción de título: `(crear nuevo PRIADS)', buscar en todos
-   los PRIADS activos, o elegir un archivo específico.  Si encuentra un
-   heading con el mismo título, actualiza su estado TODO y marca `:u:'.
-   Si se eligió un archivo específico y no hay match, copia ahí bajo
-   `* completadas' y marca `:c:`.
-4. Si se buscó en todos y no hay match, solo reporta que no se encontró y
-   deja la tarea sin marca de referido para volver a revisarla después.
-
-El subárbol fuente nunca se mueve, solo se copia, y el heading original se
-anota con un tag de una letra para que las re-corridas lo salten.  Al copiar
-a un PRIADS se anexa la fecha de hoy al título (ver
-`my--referir-copy-to-completadas')."
+  "Refer only eligible OT/DEEP roots at point through the verified engine."
   (interactive)
-  (unless (derived-mode-p 'org-mode)
-    (user-error "Este buffer no está en org-mode"))
-  (require 'denote)
-  (when (org-before-first-heading-p)
-    (user-error "El cursor no está en ningún headline; no se procesó nada"))
-  (let ((my--referir-created-priads nil)
-        (updated 0) (copied 0) (skipped 0) (already 0) (programados 0)
-        (not-found 0)
-        (has-children (save-excursion
-                        (org-back-to-heading t)
-                        (and (org-goto-first-child) t))))
-    (cl-flet ((tally (res)
-                (pcase res
-                  (:updated (cl-incf updated))
-                  (:copied  (cl-incf copied))
-                  (:skipped (cl-incf skipped))
-                  (:already (cl-incf already))
-                  (:programado (cl-incf programados))
-                  (:not-found (cl-incf not-found)))))
-      (if has-children
-          ;; Varios: subárbol en el punto, con pregunta positiva por tarea.
-          (org-with-wide-buffer
-           (org-back-to-heading t)
-           (org-map-entries
-            (lambda () (tally (my--referir-process-entry nil)))
-            nil 'tree))
-        ;; Uno: solo el headline contenedor, con la misma pregunta positiva.
-        (save-excursion
-          (org-back-to-heading t)
-          (let ((res (my--referir-process-entry t)))
-            (tally res)
-            (unless res
-              (message "El headline no es una tarea cerrada (DONE/KILL/SDM)."))))))
-    (when (buffer-modified-p) (save-buffer))
-    (message
-     "Referir pendientes: %d actualizados, %d copiados, %d saltados, %d ya-marcados, %d programados, %d no-encontrados"
-     updated copied skipped already programados not-found)))
-
-;;;;;;;;;;;;;;;;;
-;; Los PROG
-;;;;;;;;;;;;;;;;;
+  (my-dpc-refer))
 
 (defun my-org-agenda-current-file ()
   "Mostrar la Agenda View solamente para el archivo Org actual."
