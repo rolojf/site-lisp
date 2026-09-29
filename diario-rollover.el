@@ -1,15 +1,17 @@
 ;;; diario-rollover.el --- Isolated three-list diario engine -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Explicit-file engine only.  No keys, hooks, Denote creation, or PRIAD routing.
-;; Source markers are saved before destination copies; transferred work is
-;; pruned only after its destination is verified.  A retry uses the markers.
+;; Explicit-file engine only.  No hooks, Denote creation, or PRIAD routing.
+;; Frozen source receipts precede destination writes; work is pruned only
+;; after verifying saved, full-content copies in the correct container.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'org)
+(require 'org-id)
 (require 'calendar)
+(require 'diario-match)
 
 (defconst my-diario--lists '("OPORTUNIDADES Y AMENAZAS" "DEEP" "SHALLOW"))
 (defconst my-diario--active '("TODO" "NEXT" "WAIT"))
@@ -106,7 +108,7 @@ An on-disk temporary file avoids a truncated destination on write failure."
   "Validate the three root lists and return their direct managed entries.
 Nested headlines are content of their direct ancestor, not separate entries."
   (let ((roots nil) (buckets nil) (entries nil) (list-name nil)
-        (bucket nil) (keys (make-hash-table :test 'equal)))
+        (bucket nil))
     (goto-char (point-min))
     (while (re-search-forward org-heading-regexp nil t)
       (goto-char (line-beginning-position))
@@ -140,15 +142,12 @@ Nested headlines are content of their direct ancestor, not separate entries."
                                       '("DONE" "SDM" "COLD"))))
             (user-error "Unsupported diario state %S in %s: %s"
                         state list-name title))
-          (let ((key (org-entry-get nil "DIARIO_KEY")))
-            (when (and key (gethash key keys))
-              (user-error "Duplicate diario key within file: %s" key))
-            (when key (puthash key t keys))
-            (push (make-my-diario--entry
-                   :start start
-                   :end (save-excursion (org-end-of-subtree t t))
-                   :list list-name :bucket bucket :state state :key key)
-                  entries))))
+          (push (make-my-diario--entry
+                 :start start
+                 :end (save-excursion (org-end-of-subtree t t))
+                 :list list-name :bucket bucket :state state
+                 :key (org-entry-get nil "DIARIO_KEY"))
+                entries)))
         (forward-line 1)))
     (unless (and (= (length roots) 3) (= (length buckets) 2))
       (user-error "Diario needs exactly three lists and two OT buckets"))
@@ -220,12 +219,6 @@ Nested headlines are content of their direct ancestor, not separate entries."
                                         (my-diario--entry-start b)))))
     (delete-region (my-diario--entry-start entry) (my-diario--entry-end entry))))
 
-(defun my-diario--key (path entry)
-  "Derive an initial stable key from PATH and ENTRY's original position."
-  (secure-hash 'sha256
-               (format "%s:%s:%s" path (my-diario--entry-start entry)
-                       (my-diario--entry-list entry))))
-
 (defun my-diario--fingerprint (subtree)
   "Hash SUBTREE's user content, excluding only the engine's source receipts."
   (my-diario--with-text subtree
@@ -235,9 +228,9 @@ Nested headlines are content of their direct ancestor, not separate entries."
       (org-entry-delete nil property))
     (secure-hash 'sha256 (string-trim-right (buffer-string)))))
 
-(defun my-diario--mark (source path date &optional target)
+(defun my-diario--mark (source date &optional target)
   "Mark SOURCE for TARGET's first roll, or just its unparked COLD entries.
-PATH supplies new keys; DATE fixes default parking dates across retries.
+DATE fixes default parking dates across retries; only parked work needs keys.
 Receipts are stored before any destination write, so edits after a failed
 copy cannot be mistaken for the original source snapshot."
   (my-diario--with-text source
@@ -247,13 +240,14 @@ copy cannot be mistaken for the original source snapshot."
                             (not (equal (my-diario--entry-list entry)
                                         (car my-diario--lists)))))
              (cold (equal state "COLD")))
-        (when (or (and target (member state my-diario--active))
+        (when (or transfer
                   (and cold (not (save-excursion
                                    (goto-char (my-diario--entry-start entry))
                                    (org-entry-get nil "DIARIO_PARKED_TO")))))
           (goto-char (my-diario--entry-start entry))
-          (unless (org-entry-get nil "DIARIO_KEY")
-            (org-entry-put nil "DIARIO_KEY" (my-diario--key path entry)))
+          (when (and cold (not (org-entry-get nil "DIARIO_KEY")))
+            (let ((org-id-method 'uuid))
+              (org-entry-put nil "DIARIO_KEY" (org-id-new 'none))))
           (when (or transfer cold)
             (let ((previous (org-entry-get nil "DIARIO_ROLL_TO"))
                   (receipt (org-entry-get nil "DIARIO_ROLL_HASH")))
@@ -402,7 +396,8 @@ copy cannot be mistaken for the original source snapshot."
       (org-entry-put nil "DIARIO_ACTUAL_RETURN"
                      (format "[%s]" (my-diario--iso date))))
     (dolist (property '("DIARIO_LIST" "DIARIO_BUCKET" "DIARIO_ORIGIN_HASH"
-                         "DIARIO_PARKED_TO" "DIARIO_ROLL_TO"))
+                         "DIARIO_PARKED_TO" "DIARIO_ROLL_TO" "DIARIO_ROLL_HASH"
+                         "DIARIO_RETURN_DATE"))
       (org-entry-delete nil property))
     (when (equal (my-diario--entry-list entry) (car my-diario--lists))
       (goto-char (point-min))
@@ -452,13 +447,130 @@ copy cannot be mistaken for the original source snapshot."
              "^#\\+\\(?:PROPERTY:[ \t]+ID\\(?:[ \t].*\\)?\\|ID:[^\n]*\\|\\(title\\|date\\|filetags\\|identifier\\|signature\\):[^\n]*\\)\n"
              "" text t) t))))))
 
-(defun my-diario--index (entries)
-  "Return hash of ENTRIES indexed by the internal key."
-  (let ((index (make-hash-table :test 'equal)))
-    (dolist (entry entries)
-      (when-let* ((key (my-diario--entry-key entry)))
-        (puthash key entry index)))
-    index))
+(defun my-dr--ids (start end)
+  "Return (ID . MARKER) pairs for all headings between START and END."
+  (save-excursion
+    (goto-char start)
+    (let (ids)
+      (while (re-search-forward org-heading-regexp end t)
+        (when-let* ((id (org-entry-get nil "ID" nil)))
+          (push (cons id (copy-marker (line-beginning-position))) ids)))
+      (nreverse ids))))
+
+(defun my-dr--links (start end replacements)
+  "Remap actual id links inside START..END using REPLACEMENTS.
+Descriptions, literal examples and links to unrelated entries stay intact."
+  (save-restriction
+    (narrow-to-region start end)
+    (let ((links (org-element-map (org-element-parse-buffer) 'link
+                   (lambda (link)
+                     (when (equal (org-element-property :type link) "id")
+                       link)))))
+      (dolist (link (reverse links))
+        (let* ((old (org-element-property :path link))
+               (new (cdr (assoc old replacements))))
+          (when new
+            (goto-char (org-element-property :begin link))
+            (when (search-forward (concat "id:" old)
+                                  (org-element-property :end link) t)
+              (replace-match (concat "id:" new) t t))))))))
+
+(defun my-dr--fix-ids (placed)
+  "Keep newly PLACED source IDs unique without losing the retained variant.
+Only a same-task conflict immediately preceding the incoming subtree may
+receive replacement IDs.  Other collisions stop before any file is saved."
+  (unless (eq (plist-get placed :result) 'exact)
+    (let* ((start (plist-get placed :start))
+           (end (save-excursion (goto-char start) (org-end-of-subtree t t)))
+           (incoming (my-dr--ids start end))
+           all variant replacements)
+      (unwind-protect
+          (when incoming
+            (when (eq (plist-get placed :result) 'conflict)
+              (save-excursion
+                (goto-char start)
+                (let ((level (org-outline-level)))
+                  (while (and (re-search-backward org-heading-regexp nil t)
+                              (> (org-outline-level) level)))
+                  (unless (= (org-outline-level) level)
+                    (user-error "Cannot locate retained ID-conflict variant"))
+                  (setq variant (copy-marker (line-beginning-position))))))
+            (setq all (my-dr--ids (point-min) (point-max)))
+            ;; Validate every collision before changing any ID or link.
+            (dolist (item incoming)
+              (dolist (other all)
+                (when (and (equal (car item) (car other))
+                           (/= (cdr item) (cdr other)))
+                  (unless (and variant (<= variant (cdr other))
+                               (< (cdr other) start))
+                    (user-error "Org ID collision outside retained task: %s" (car item)))
+                  (unless (assoc (car item) replacements)
+                    (let ((new (let ((org-id-method 'uuid)) (org-id-new 'none))))
+                      (while (or (assoc new all) (rassoc new replacements))
+                        (setq new (let ((org-id-method 'uuid)) (org-id-new 'none))))
+                      (push (cons (car item) new) replacements))))))
+            (dolist (item all)
+              (when (and variant (<= variant (cdr item)) (< (cdr item) start))
+                (when-let* ((new (cdr (assoc (car item) replacements))))
+                  (goto-char (cdr item))
+                  (org-entry-put nil "ID" new))))
+            (when replacements (my-dr--links variant start replacements)))
+        (dolist (item (append incoming all)) (set-marker (cdr item) nil))
+        (when variant (set-marker variant nil))))))
+
+(defun my-diario--place (subtree root &optional bucket origin)
+  "Place SUBTREE in ROOT/BUCKET, optionally restricting LUEGO to ORIGIN.
+ORIGIN is a (LIST . BUCKET) pair.  Only direct siblings in the selected
+container participate; never move or deduplicate its existing entries."
+  (let* ((parent (or (my-diario--dest-heading root)
+                     (user-error "Missing destination list: %s" root)))
+         (parent (if bucket
+                     (or (my-diario--dest-heading bucket parent)
+                         (user-error "Missing destination OT bucket: %s" bucket))
+                   parent))
+         (level (if bucket 3 2))
+         (end (copy-marker
+               (save-excursion (goto-char parent) (org-end-of-subtree t t)) t))
+         starts placed)
+    (unwind-protect
+        (progn
+          (goto-char parent)
+          (forward-line 1)
+          (while (re-search-forward org-heading-regexp (marker-position end) t)
+            (when (= (org-outline-level) level)
+              (let ((start (line-beginning-position)))
+                (when (or (null origin)
+                          (and (equal (car origin)
+                                      (org-entry-get nil "DIARIO_LIST"))
+                               (equal (cdr origin)
+                                      (org-entry-get nil "DIARIO_BUCKET"))))
+                  (push (copy-marker start) starts)))))
+          (setq starts (nreverse starts)
+                placed (my-dm-place subtree starts end))
+          (my-dr--fix-ids placed)
+          (plist-put placed :start (copy-marker (plist-get placed :start))))
+      (dolist (marker starts) (set-marker marker nil))
+      (set-marker end nil))))
+
+(defun my-diario--exact (text subtree root &optional bucket origin)
+  "Verify SUBTREE is fully present in saved TEXT in ROOT/BUCKET or ORIGIN."
+  (my-diario--with-text text
+    (eq 'exact (plist-get (my-diario--place subtree root bucket origin)
+                           :result))))
+
+;;;###autoload
+(defun my-diario-clean (path)
+  "Safely remove DIARIO_KEY from a settled diario PATH and verify its save.
+The shared cleaner refuses unresolved receipts before changing any content."
+  (unless (and (stringp path) (file-name-absolute-p path)
+               (file-regular-p path) (not (file-symlink-p path)))
+    (user-error "Need an absolute regular diario for cleanup: %S" path))
+  (let* ((before (my-diario--read path))
+         (clean (my-dm-clean before)))
+    (my-diario--save path before clean)
+    (unless (equal (my-diario--read path) clean)
+      (user-error "Diario cleanup verification failed: %s" path))
+    clean))
 
 (defun my-diario--check-paths (paths date)
   "Check DATE and distinct absolute PATHS; the last path may not exist yet."
@@ -478,12 +590,18 @@ copy cannot be mistaken for the original source snapshot."
                (cl-every #'file-regular-p (butlast paths)))
     (user-error "Need distinct absolute paths and existing regular diario files")))
 
-(defun my-diario--transfers (source-text target-text target)
-  "Find pending transfers and verify both copies against SOURCE-TEXT's receipts.
-TARGET-TEXT may be the in-memory new diario or a saved resumed one."
-  (let ((index (my-diario--index
-                (my-diario--with-text target-text (my-diario--scan))))
-        (entries (my-diario--with-text source-text (my-diario--scan)))
+(defun my-diario--unmarked (subtree)
+  "Remove consumed source-only roll metadata from an incoming SUBTREE."
+  (my-diario--with-text subtree
+    (goto-char (point-min))
+    (dolist (property '("DIARIO_ROLL_TO" "DIARIO_ROLL_HASH"
+                         "DIARIO_PARK_DATE" "DIARIO_PARKED_TO"))
+      (org-entry-delete nil property))
+    (buffer-string)))
+
+(defun my-dr--pending (source-text target)
+  "Collect and validate pending SOURCE-TEXT transfers addressed to TARGET."
+  (let ((entries (my-diario--with-text source-text (my-diario--scan)))
         transfers)
     (dolist (entry entries)
       (when (and (member (my-diario--entry-state entry) my-diario--active)
@@ -492,31 +610,37 @@ TARGET-TEXT may be the in-memory new diario or a saved resumed one."
                           (goto-char (my-diario--entry-start entry))
                           (org-entry-get nil "DIARIO_ROLL_TO")) target))
         (my-diario--receipt source-text entry)
-        (let ((copy (gethash (my-diario--entry-key entry) index)))
-          (unless (and copy
-                       (equal (my-diario--entry-list copy) (my-diario--entry-list entry))
-                       (equal (my-diario--entry-bucket copy)
-                              (my-diario--entry-bucket entry))
-                       (equal (my-diario--with-text source-text
-                                (goto-char (my-diario--entry-start entry))
-                                (org-entry-get nil "DIARIO_ROLL_HASH"))
-                              (my-diario--fingerprint
-                               (my-diario--subtree target-text copy))))
-            (user-error "Diario target copy changed or missing; keep source: %s"
-                        (my-diario--entry-key entry))))
         (push entry transfers)))
     (nreverse transfers)))
 
+(defun my-diario--transfers (source-text target-text target)
+  "Admit pending SOURCE-TEXT transfers to TARGET-TEXT using frozen receipts.
+Return (UPDATED-TARGET TRANSFERS).  Existing content and order are retained."
+  (let ((transfers (my-dr--pending source-text target)))
+    (list (my-diario--with-text target-text
+            (dolist (entry transfers)
+              (my-diario--place
+               (my-diario--unmarked (my-diario--subtree source-text entry))
+               (my-diario--entry-list entry) (my-diario--entry-bucket entry)))
+            (buffer-string))
+          transfers)))
+
+(defun my-diario--verify-moves (source-text saved transfers)
+  "Require each frozen source transfer in TRANSFERS to exist in SAVED."
+  (dolist (entry transfers)
+    (my-diario--receipt source-text entry)
+    (unless (my-diario--exact
+             saved (my-diario--unmarked (my-diario--subtree source-text entry))
+             (my-diario--entry-list entry) (my-diario--entry-bucket entry))
+      (user-error "Diario transfer missing from saved destination: %s"
+                  (my-diario--entry-start entry)))))
+
 (defun my-diario--park-pending (source source-text later-text later &optional target)
-  "Save pending COLD entries to LATER, then acknowledge them in SOURCE.
-With TARGET, park only COLD entries marked for that roll.  Return a list
-(UPDATED-SOURCE UPDATED-LATER NEW-COUNT).  Never remove source snapshots."
-  (let* ((entries (my-diario--with-text source-text (my-diario--scan)))
-         (index (my-diario--index
-                 (when later-text
-                   (my-diario--with-text later-text (my-diario--later-scan)))))
-         (count 0)
-         acknowledge)
+  "Save pending COLD to LATER, then acknowledge snapshots in SOURCE.
+With TARGET, only park COLD marked for that roll.  Return
+(UPDATED-SOURCE UPDATED-LATER NEW-COUNT); never remove COLD snapshots."
+  (let ((entries (my-diario--with-text source-text (my-diario--scan)))
+        (count 0) acknowledge)
     (dolist (entry entries)
       (when (and (equal (my-diario--entry-state entry) "COLD")
                  (my-diario--with-text source-text
@@ -528,25 +652,52 @@ With TARGET, park only COLD entries marked for that roll.  Return a list
         (let* ((key (my-diario--entry-key entry))
                (parked (my-diario--parked (my-diario--subtree source-text entry)
                                          entry))
-               (copy (gethash key index)))
-          (if copy
-              (unless (equal (string-trim-right parked)
-                             (string-trim-right (my-diario--subtree later-text copy)))
-                (user-error "LUEGO copy changed or conflicts with source: %s" key))
-            (let ((updated (my-diario--with-text (or later-text "* LUEGO\n")
-                             (my-diario--append parked "LUEGO")
-                             (buffer-string))))
-              (my-diario--save later later-text updated)
-              (setq later-text updated
-                    index (my-diario--index
-                           (my-diario--with-text updated (my-diario--later-scan)))
-                    count (1+ count))))
-          (push entry acknowledge))))
+               (occupied (cl-find key (my-diario--with-text (or later-text "* LUEGO\n")
+                                        (my-diario--later-scan))
+                                  :key #'my-diario--entry-key :test #'equal))
+               result)
+          (let ((before later-text))
+            (setq later-text
+                  (my-diario--with-text (or later-text "* LUEGO\n")
+                  (setq result
+                        (my-diario--place parked "LUEGO" nil
+                                          (cons (my-diario--entry-list entry)
+                                                (my-diario--entry-bucket entry))))
+                  (when (and occupied (not (eq (plist-get result :result) 'exact)))
+                    (goto-char (plist-get result :start))
+                    (let* ((existing (my-diario--with-text (or before "* LUEGO\n")
+                                       (my-diario--later-scan)))
+                           (new (let ((org-id-method 'uuid)) (org-id-new 'none))))
+                      (while (cl-find new existing :key #'my-diario--entry-key
+                                      :test #'equal)
+                        (setq new (let ((org-id-method 'uuid)) (org-id-new 'none))))
+                      (goto-char (plist-get result :start))
+                      (org-entry-put nil "DIARIO_KEY" new)
+                      (org-entry-put nil "DIARIO_ORIGIN_HASH"
+                                     (my-diario--origin-hash new
+                                       (my-diario--entry-list entry)
+                                       (my-diario--entry-bucket entry)))))
+                  (buffer-string)))
+            (unless (eq (plist-get result :result) 'exact)
+              (my-diario--with-text later-text (my-diario--later-scan))
+              (my-diario--save later before later-text)
+              (cl-incf count)))
+          (push (cons entry parked) acknowledge))))
 
+    ;; Full-content verification is against a fresh saved LUEGO read, not an
+    ;; in-memory candidate or a matching legacy key.
     (when acknowledge
+      (let ((saved (my-diario--read later)))
+        (dolist (item acknowledge)
+          (my-diario--receipt source-text (car item))
+          (unless (my-diario--exact saved (cdr item) "LUEGO" nil
+                                    (cons (my-diario--entry-list (car item))
+                                          (my-diario--entry-bucket (car item))))
+            (user-error "LUEGO copy missing after save; keep source: %s"
+                        (my-diario--entry-start (car item))))))
       (let ((updated (my-diario--with-text source-text
-                       (dolist (entry acknowledge)
-                         (goto-char (my-diario--entry-start entry))
+                       (dolist (item acknowledge)
+                         (goto-char (my-diario--entry-start (car item)))
                          (org-entry-put nil "DIARIO_PARKED_TO" later)
                          (when target (org-entry-delete nil "DIARIO_ROLL_TO")))
                        (buffer-string))))
@@ -567,55 +718,116 @@ With TARGET, park only COLD entries marked for that roll.  Return a list
       (my-diario--date date)
       date)))
 
+(defun my-diario--legacy-date (target-text entry)
+  "Recover a unique same-key return date in ENTRY's exact container.
+Old interrupted returns have no source receipt.  Never choose between
+multiple same-key target entries, even if one appears to match content."
+  (let ((copies (cl-remove-if-not
+                 (lambda (copy)
+                   (and (equal (my-diario--entry-key entry)
+                               (my-diario--entry-key copy))
+                        (equal (my-diario--entry-list entry)
+                               (my-diario--entry-list copy))
+                        (equal (my-diario--entry-bucket entry)
+                               (my-diario--entry-bucket copy))))
+                 (my-diario--with-text target-text (my-diario--scan)))))
+    (when (cdr copies)
+      (user-error "Ambiguous legacy LUEGO return for key: %s"
+                  (my-diario--entry-key entry)))
+    (when copies (my-diario--return-date target-text (car copies)))))
+
 (defun my-diario--return-due (target later date)
-  "Safely return due/overdue LATER entries into existing TARGET; count new copies.
-An existing keyed copy is trusted only if its full transformed subtree still
-matches LATER, including location, state and return history.  LATER is pruned
-only after the destination was saved and verified."
+  "Return due LATER entries to TARGET, verifying saved copies before deletion.
+Persist the actual date and frozen source receipt before any target write;
+retries preserve that date, including after an interrupted next-day return."
   (let* ((target-before (my-diario--read target))
          (target-text target-before)
-         (later-text (my-diario--read later))
+         (later-before (my-diario--read later))
+         (later-text later-before)
          (entries (when later-text
                     (my-diario--with-text later-text (my-diario--later-scan))))
-         (index (my-diario--index
-                 (my-diario--with-text target-text (my-diario--scan))))
-         (count 0)
-         due)
+         (count 0) due)
+    (my-diario--with-text target-text (my-diario--scan))
     (dolist (entry entries)
-      (let ((scheduled (my-diario--with-text later-text
-                         (goto-char (my-diario--entry-start entry))
-                         (org-get-scheduled-time (point)))))
-        (unless (string< date (format-time-string "%Y%m%d" scheduled))
-          (let* ((key (my-diario--entry-key entry))
-                 (copy (gethash key index))
-                 (actual (if copy (my-diario--return-date target-text copy) date))
-                 (returned (my-diario--returned
-                            (my-diario--subtree later-text entry) entry actual)))
-            (if copy
-                (unless (and (equal (my-diario--entry-list copy)
-                                    (my-diario--entry-list entry))
-                             (equal (my-diario--entry-bucket copy)
-                                    (my-diario--entry-bucket entry))
-                             (equal (string-trim-right returned)
-                                    (string-trim-right
-                                     (my-diario--subtree target-text copy))))
-                  (user-error "Due item target changed; keep LUEGO: %s" key))
-              (setq target-text
-                    (my-diario--with-text target-text
-                      (my-diario--append returned (my-diario--entry-list entry)
-                                         (my-diario--entry-bucket entry))
-                      (buffer-string))
-                    index (my-diario--index
-                           (my-diario--with-text target-text (my-diario--scan)))
-                    count (1+ count)))
-            (push entry due)))))
+      (pcase-let ((`(,scheduled ,pending ,frozen ,receipt)
+                   (my-diario--with-text later-text
+                     (goto-char (my-diario--entry-start entry))
+                     (list (org-get-scheduled-time (point))
+                           (org-entry-get nil "DIARIO_ROLL_TO")
+                           (org-entry-get nil "DIARIO_RETURN_DATE")
+                           (org-entry-get nil "DIARIO_ROLL_HASH")))))
+        (when (or pending frozen receipt)
+          (unless (and pending frozen receipt (equal pending target))
+            (user-error "Incomplete or different pending LUEGO return: %s"
+                        (my-diario--entry-key entry)))
+          (my-diario--date frozen)
+          (my-diario--receipt later-text entry))
+        (when (or pending
+                  (not (string< date (format-time-string "%Y%m%d" scheduled))))
+          (push (cons (my-diario--entry-key entry)
+                      (or frozen (my-diario--legacy-date target-text entry) date))
+                due))))
+    (setq due (nreverse due))
 
-    (my-diario--save target target-before target-text)
+    ;; Reject missing/ambiguous containers before persisting return receipts.
+    (my-diario--with-text target-text
+      (dolist (entry entries)
+        (when (assoc (my-diario--entry-key entry) due)
+          (let ((parent (or (my-diario--dest-heading (my-diario--entry-list entry))
+                            (user-error "Missing destination list: %s"
+                                        (my-diario--entry-list entry)))))
+            (when-let* ((bucket (my-diario--entry-bucket entry)))
+              (unless (my-diario--dest-heading bucket parent)
+                (user-error "Missing destination OT bucket: %s" bucket)))))))
+
     (when due
-      (let ((updated (my-diario--with-text later-text
-                       (my-diario--delete due)
-                       (buffer-string))))
-        (my-diario--save later later-text updated)))
+      (setq later-text
+            (my-diario--with-text later-text
+              (dolist (entry (reverse entries))
+                (when-let* ((actual (cdr (assoc (my-diario--entry-key entry) due))))
+                  (goto-char (my-diario--entry-start entry))
+                  (unless (org-entry-get nil "DIARIO_ROLL_TO")
+                    (org-entry-put nil "DIARIO_ROLL_TO" target)
+                    (org-entry-put nil "DIARIO_RETURN_DATE" actual)
+                    (org-entry-put
+                     nil "DIARIO_ROLL_HASH"
+                     (my-diario--fingerprint
+                      (buffer-substring-no-properties
+                       (point) (save-excursion (org-end-of-subtree t t))))))))
+              (buffer-string)))
+      (my-diario--save later later-before later-text)
+      (setq entries (my-diario--with-text later-text (my-diario--later-scan)))
+      (let (checks)
+        (setq target-text
+              (my-diario--with-text target-text
+                (dolist (entry entries)
+                  (when-let* ((actual (cdr (assoc (my-diario--entry-key entry) due))))
+                    (my-diario--receipt later-text entry)
+                    (let* ((returned (my-diario--returned
+                                      (my-diario--subtree later-text entry)
+                                      entry actual))
+                           (placed (my-diario--place
+                                    returned (my-diario--entry-list entry)
+                                    (my-diario--entry-bucket entry))))
+                      (unless (eq (plist-get placed :result) 'exact)
+                        (cl-incf count))
+                      (push (cons entry returned) checks))))
+                (buffer-string)))
+        (my-diario--save target target-before target-text)
+        (let ((saved (my-diario--read target)))
+          (dolist (item checks)
+            (my-diario--receipt later-text (car item))
+            (unless (my-diario--exact saved (cdr item)
+                                      (my-diario--entry-list (car item))
+                                      (my-diario--entry-bucket (car item)))
+              (user-error "Returned copy missing after save; keep LUEGO: %s"
+                          (my-diario--entry-key (car item)))))
+          (unless (equal later-text (my-diario--read later))
+            (user-error "LUEGO changed before return deletion: %s" later))
+          (let ((updated (my-diario--with-text later-text
+                           (my-diario--delete (mapcar #'car checks))
+                           (buffer-string))))
+            (my-diario--save later later-text updated)))))
     count))
 
 ;;;###autoload
@@ -625,28 +837,33 @@ DATE is YYYYMMDD; missing schedules are fixed at DATE + 14 days on the
 source before any copy.  Keep all source COLD subtrees as snapshots.  Repeat
 calls neither duplicate parked entries nor reset their dates.  A plist with
 :parked gives the number of new LATER copies.  No diario target is needed.
-A legacy LUEGO layout, absent receipts, or changed copies require manual
-reconciliation; no guessing or destructive recovery is attempted."
+A legacy LUEGO layout or a changed source receipt requires manual
+reconciliation; differing destination content is retained as a flagged copy."
   (my-diario--check-paths (list source later) date)
   (let* ((original (my-diario--read source))
          (later-text (my-diario--read later)))
     (my-diario--with-text original (my-diario--scan))
     (when later-text (my-diario--with-text later-text (my-diario--later-scan)))
-    (let ((marked (my-diario--mark original source date)))
+    (let ((marked (my-diario--mark original date)))
       (my-diario--save source original marked)
-      (list :parked (nth 2 (my-diario--park-pending source marked later-text later))))))
+      (let ((parked (nth 2 (my-diario--park-pending source marked later-text later))))
+        (my-diario-clean source)
+        (list :parked parked)))))
 
 ;;;###autoload
 (defun my-diario-return (target later date)
   "Return due/overdue COLD entries from absolute LATER to absolute TARGET.
 DATE is YYYYMMDD; TARGET must already have all three lists/two OT buckets.
-Append each due item to its original list/bucket in LUEGO order as NEXT,
+Place each due item in its original list/bucket in LUEGO order as NEXT,
 consume its SCHEDULED date into inactive planned/actual return properties,
 and retain the entire subtree.  This needs no previous source diario and no
 PRIAD action.  Remove from LATER only after verifying a saved target copy;
-refuse edited or ambiguous copies.  Return a plist with :returned (new copies)."
+preserve edited copies beside the verified incoming one; refuse ambiguous
+legacy correspondence.  Return a plist with :returned (new copies)."
   (my-diario--check-paths (list target later) date)
-  (list :returned (my-diario--return-due target later date)))
+  (let ((count (my-diario--return-due target later date)))
+    (my-diario-clean target)
+    (list :returned count)))
 
 ;;;###autoload
 (defun my-diario-roll (source target later date)
@@ -679,7 +896,7 @@ entries without receipts need manual reconciliation.  Return a plist with
     ;; Persist receipts before copying.  The saved target is never initialized
     ;; from an already edited, initialized diario on a same-day retry.
     (when fresh
-      (let ((marked (my-diario--mark source-text source date target)))
+      (let ((marked (my-diario--mark source-text date target)))
         (my-diario--save source source-text marked)
         (setq source-text marked
               source-entries (my-diario--with-text marked (my-diario--scan))))
@@ -692,26 +909,31 @@ entries without receipts need manual reconciliation.  Return a plist with
                                         my-diario--active)))
                          source-entries)))
 
-    (my-diario--transfers source-text target-text target)
-    (pcase-let ((`(,marked ,parked ,count)
-                 (my-diario--park-pending source source-text later-text later target)))
-      (setq source-text marked later-text parked)
-      (setf (plist-get summary :parked) count))
+    (pcase-let ((`(,updated ,transfers)
+                 (my-diario--transfers source-text target-text target)))
+      (setq target-text updated)
+      (pcase-let ((`(,marked ,parked ,count)
+                   (my-diario--park-pending source source-text later-text later target)))
+        (setq source-text marked later-text parked)
+        (setf (plist-get summary :parked) count))
+      ;; Parking acknowledgements shift source positions, not frozen receipts.
+      (setq transfers (my-dr--pending source-text target))
 
-    (my-diario--save target target-before target-text)
-    (setf (plist-get summary :returned) (my-diario--return-due target later date))
+      (my-diario--save target target-before target-text)
+      (setf (plist-get summary :returned) (my-diario--return-due target later date))
 
-    ;; Recheck both complete copies after all target writes, immediately before
-    ;; removing transferred work from SOURCE.  A key alone is not a receipt.
-    (let ((transfers (my-diario--transfers source-text (my-diario--read target)
-                                           target)))
+      ;; Re-read saved destination immediately before pruning; a matching
+      ;; heading or a legacy key never substitutes for transformed content.
       (when transfers
-        (let ((updated (my-diario--with-text source-text
-                         (my-diario--delete transfers)
-                         (buffer-string))))
-          (my-diario--save source source-text updated)
-          (setf (plist-get summary :moved) (length transfers)))))
-    summary))
+        (my-diario--verify-moves source-text (my-diario--read target) transfers)
+        (let ((updated-source (my-diario--with-text source-text
+                                (my-diario--delete transfers)
+                                (buffer-string))))
+          (my-diario--save source source-text updated-source)
+          (setf (plist-get summary :moved) (length transfers))))
+      (my-diario-clean source)
+      (my-diario-clean target)
+      summary)))
 
 (provide 'diario-rollover)
 ;;; diario-rollover.el ends here

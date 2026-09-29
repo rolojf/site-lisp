@@ -561,5 +561,53 @@
       (should (equal global-before (lookup-key (current-global-map)
                                                (kbd "C-c n f")))))))
 
+(ert-deftest my-diario-commands-existing-day-cleans-two-only ()
+  (my-dct-test--with-files
+    (let ((older (expand-file-name "20260529T0800--older__journal.org" dir)))
+      (with-temp-file older
+        (insert (replace-regexp-in-string "20260601T1100" "20260529T0800"
+                                          my-dct-test--source t t)))
+      (with-temp-file target
+        (insert (replace-regexp-in-string "* Notas\n"
+                                          "* Notas\n** Contexto\n:PROPERTIES:\n:DIARIO_KEY: old-note\n:END:\n"
+                                          my-dct-test--ready t t)))
+      (let ((previous (my-dct-test--text source))
+            (old (my-dct-test--text older)))
+        (with-temp-file source
+          (insert (replace-regexp-in-string
+                   "* Notas\n" "* Notas\n** Nota\n:PROPERTIES:\n:DIARIO_KEY: old-source-note\n:END:\n"
+                   previous t t)))
+        (should (= 0 (plist-get (my-diario-today) :returned)))
+        (should-not (string-search ":DIARIO_KEY:" (my-dct-test--text source)))
+        (should-not (string-search ":DIARIO_KEY:" (my-dct-test--text target)))
+        (should (equal old (my-dct-test--text older)))
+        (should-not (string-search "TODO Trabajo" (my-dct-test--text target)))
+        (should (= 0 (plist-get (my-diario-today) :returned)))
+        (should (equal old (my-dct-test--text older)))))))
+
+(ert-deftest my-diario-commands-existing-day-pending-keeps-source-keys ()
+  (my-dct-test--with-files
+    (with-temp-file target (insert my-dct-test--ready))
+    (with-temp-file source
+      (insert (replace-regexp-in-string
+               "** TODO Trabajo\n"
+               "** TODO Trabajo\n:PROPERTIES:\n:DIARIO_ROLL_TO: pending-target\n:DIARIO_KEY: receipt-old\n:END:\n"
+               my-dct-test--source t t)))
+    (let ((before (my-dct-test--text source)))
+      (should-error (my-diario-today) :type 'user-error)
+      (should (equal before (my-dct-test--text source))))))
+
+(ert-deftest my-diario-commands-one-target-clean ()
+  (my-dct-test--with-files
+    (with-temp-file target (insert my-dct-test--ready))
+    (let ((clean (symbol-function 'my-diario-clean))
+          (target-calls 0))
+      (cl-letf (((symbol-function 'my-diario-clean)
+                 (lambda (path)
+                   (when (equal path target) (cl-incf target-calls))
+                   (funcall clean path))))
+        (my-diario-today))
+      (should (= 1 target-calls)))))
+
 (provide 'test-diario-commands)
 ;;; test-diario-commands.el ends here

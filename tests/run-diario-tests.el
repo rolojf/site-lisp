@@ -51,11 +51,16 @@ Run no other Emacs test session concurrently."
         (ert-quiet t)
         (selector (or selector my-dt--selector)))
     (dolist (name (or modules
-                      '("diario-rollover" "diario-focus" "diario-migrate"
+                      '("diario-match" "diario-rollover" "diario-focus" "diario-migrate"
                         "diario-import" "diario-priads" "diario-commands"
                         "diario-priad-commands")))
       (load (expand-file-name (concat name ".el") my-dt--root) nil t)
       (load (expand-file-name (concat "tests/test-" name ".el") my-dt--root)
+            nil t))
+
+    ;; Cross-command scenarios reuse the bounded fixtures from the full suite.
+    (unless modules
+      (load (expand-file-name "tests/test-diario-integration.el" my-dt--root)
             nil t))
 
     (cl-letf (((symbol-function 'ask-user-about-supersession-threat)

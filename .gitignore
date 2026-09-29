@@ -1,4 +1,7 @@
 */
+!/tests/
+/tests/*
+!/tests/*.el
 /.org-id-locations
 /README
 /modus-themes/

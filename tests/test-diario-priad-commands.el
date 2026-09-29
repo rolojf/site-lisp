@@ -617,5 +617,44 @@
         (should (= 1 (plist-get (my-dpc-refer) :copied)))))
     (should (string-search "* OT cliente_techo" (my-dpc-test--disk priad)))))
 
+(ert-deftest my-diario-priad-commands-keyless-receipt-close-after-new-day ()
+  (my-dpc-test--files
+    (cl-letf (((symbol-function 'my-diario-current) (lambda () target))
+              ((symbol-function 'completing-read) (lambda (&rest _) "DEEP")))
+      (should (= 1 (plist-get (my-dpc--import) :copied))))
+    (should-not (string-search "DIARIO_KEY" (my-dpc-test--disk target)))
+    (let ((visitor (current-buffer))
+          (next-before (my-dpc-test--disk next))
+          (kill-buffer-query-functions (list #'my-dpc-maybe-on-kill)))
+      (cl-letf (((symbol-function 'my-diario-current)
+                 (lambda () (error "A receipted close needs no new diary"))))
+        (let ((this-command 'kill-buffer))
+          (should (kill-buffer visitor))))
+      (should-not (buffer-live-p visitor))
+      (should (equal next-before (my-dpc-test--disk next)))
+      (should (= 1 (my-dpc-test--count "** TODO Cotización"
+                                      (my-dpc-test--disk target)))))))
+
+(ert-deftest my-diario-priad-commands-pending-state-change-blocks-close ()
+  (my-dpc-test--files
+    (cl-letf (((symbol-function 'my-diario-current) (lambda () target))
+              ((symbol-function 'completing-read) (lambda (&rest _) "SHALLOW"))
+              ((symbol-function 'my-di--save-target)
+               (lambda (&rest _) (user-error "Injected target failure"))))
+      (should-error (my-dpc--import) :type 'user-error))
+    (my-dpc-test--at "Cotización")
+    (org-todo "DONE")
+    (save-buffer)
+    (let ((visitor (current-buffer))
+          (kill-buffer-query-functions (list #'my-dpc-maybe-on-kill)))
+      (cl-letf (((symbol-function 'my-diario-current) (lambda () target)))
+        (let ((this-command 'kill-buffer))
+          (should-error (kill-buffer visitor) :type 'user-error)))
+      (should (buffer-live-p visitor))
+      (should (string-search ":DIARIO_EXPORT_PENDING:"
+                             (my-dpc-test--disk source)))
+      (should-not (string-search "** TODO Cotización"
+                                 (my-dpc-test--disk target))))))
+
 (provide 'test-diario-priad-commands)
 ;;; test-diario-priad-commands.el ends here

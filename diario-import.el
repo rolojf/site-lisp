@@ -1,16 +1,16 @@
 ;;; diario-import.el --- Explicit PRIAD to three-list diario import -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; No hooks or key bindings.  DIARIO_KEY identifies the source entry in
-;; diarios and in rollover; source receipts record each verified export.
+;; No hooks or key bindings.  Source receipts record each verified export;
+;; destination admission compares complete, scoped diario subtrees.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'org)
-(require 'org-id)
 (require 'subr-x)
 (require 'diario-focus)
+(require 'diario-match)
 
 (defvar denote-directory)
 (defvar denote-journal-directory)
@@ -167,16 +167,15 @@ Use a same-directory temporary file so a failed write cannot truncate PATH."
     (unless parent (user-error "Falta el destino diario: %s" choice))
     parent))
 
-(defun my-di--target-keys ()
-  "Validate the diario lists and return DIARIO_KEY to direct-entry index.
-A key in a nested or outside-list heading is not an importable direct entry."
+(defun my-di--entries ()
+  "Validate diario layout and return (CHOICE . POSITION) for direct entries.
+Nested and outside-list headings are not importable candidates."
   (let* ((ot (my-di--heading my-di--ot))
          (deep (my-di--heading "DEEP"))
          (shallow (my-di--heading "SHALLOW"))
          (empresa (when ot (my-di--heading "Empresa" ot)))
          (contratista (when ot (my-di--heading "Contratista" ot)))
-         (index (make-hash-table :test 'equal))
-         list-name bucket)
+         list-name bucket entries)
     (unless (and ot deep shallow empresa contratista)
       (user-error "Diario sin las tres listas y las dos colas OT"))
     (goto-char (point-min))
@@ -184,8 +183,7 @@ A key in a nested or outside-list heading is not an importable direct entry."
       (goto-char (line-beginning-position))
       (let* ((level (org-outline-level))
              (title (org-get-heading t t t t))
-             (key (org-entry-get nil "DIARIO_KEY"))
-             (choice nil))
+             choice)
         (cond
          ((= level 1)
           (setq list-name (and (member title (list my-di--ot "DEEP" "SHALLOW")) title)
@@ -201,14 +199,9 @@ A key in a nested or outside-list heading is not an importable direct entry."
           (setq choice (concat "OT " bucket)))
          ((and (member list-name '("DEEP" "SHALLOW")) (= level 2))
           (setq choice list-name)))
-        (when key
-          (when (string-empty-p key)
-            (user-error "DIARIO_KEY vacía en el diario"))
-          (when (gethash key index)
-            (user-error "DIARIO_KEY repetida en el diario: %s" key))
-          (puthash key (or choice 'nested) index)))
+        (when choice (push (cons choice (point)) entries)))
       (forward-line 1))
-    index))
+    (nreverse entries)))
 
 (defun my-di--receipts ()
   "Return decoded paths in DIARIO_EXPORTS at point, or signal invalid data."
@@ -238,23 +231,25 @@ A key in a nested or outside-list heading is not an importable direct entry."
                                 (append paths (list path)) ",")))))
 
 (defun my-di--roots ()
-  "Return (MARKERS . NESTED) for literal TODO roots in current source.
-A TODO under another TODO, exported/pending root, or referred record is
-historical subtree content even after the ancestor changes TODO state."
+  "Return (MARKERS . NESTED) for TODO and pending roots in current source.
+A nested TODO under another TODO, exported/pending root, or referred record
+is historical subtree content even after the ancestor changes TODO state."
   (let (markers (nested 0))
     (org-map-entries
      (lambda ()
-       (if (save-excursion
-             (catch 'ancestor
-               (while (org-up-heading-safe)
-                 (when (or (equal (org-get-todo-state) "TODO")
-                           (org-entry-get nil "DIARIO_EXPORTS")
-                           (org-entry-get nil "DIARIO_EXPORT_PENDING")
-                           (org-entry-get nil "DIARIO_REF_KEY"))
-                   (throw 'ancestor t)))))
-           (cl-incf nested)
-         (push (copy-marker (point)) markers)))
-     "/TODO" 'file)
+       (when (or (equal (org-get-todo-state) "TODO")
+                 (org-entry-get nil "DIARIO_EXPORT_PENDING" nil))
+         (if (save-excursion
+               (catch 'ancestor
+                 (while (org-up-heading-safe)
+                   (when (or (equal (org-get-todo-state) "TODO")
+                             (org-entry-get nil "DIARIO_EXPORTS" nil)
+                             (org-entry-get nil "DIARIO_EXPORT_PENDING" nil)
+                             (org-entry-get nil "DIARIO_REF_KEY" nil))
+                     (throw 'ancestor t)))))
+             (cl-incf nested)
+           (push (copy-marker (point)) markers))))
+     nil 'file)
     (cons (nreverse markers) nested)))
 
 (defun my-di--choice ()
@@ -304,7 +299,7 @@ confirm an association without an explicit choice, even if only one exists."
 
 (defun my-di--copy (choice)
   "Return the full subtree at point adjusted to the diario level for CHOICE.
-Keep all user content; copied Org IDs and source export metadata are removed."
+Keep user content; remove Org IDs, legacy keys, and source export metadata."
   (let ((text (buffer-substring-no-properties
                (point) (save-excursion (org-end-of-subtree t t))))
         (level (if (string-prefix-p "OT " choice) 3 2)))
@@ -323,22 +318,32 @@ Keep all user content; copied Org IDs and source export metadata are removed."
        (goto-char (point-max))
        (while (re-search-backward org-heading-regexp nil t)
          (goto-char (line-beginning-position))
-         (dolist (property '("ID" "DIARIO_EXPORTS" "DIARIO_EXPORT_PENDING"
+         (dolist (property '("ID" "DIARIO_KEY" "DIARIO_EXPORTS"
+                              "DIARIO_EXPORT_PENDING" "DIARIO_EXPORT_HASH"
                               "DIARIO_IMPORT_DEST"))
            (org-entry-delete nil property)))
        (buffer-string)))))
 
-(defun my-di--append (choice text)
-  "Append subtree TEXT under CHOICE in the current working diario buffer."
-  (goto-char (my-di--container choice))
-  (org-end-of-subtree t t)
-  (unless (bolp) (insert "\n"))
-  (insert text)
-  (unless (bolp) (insert "\n")))
+(defun my-di--place (choice text)
+  "Admit TEXT in CHOICE's container using refreshed direct-entry positions."
+  (let* ((entries (my-di--entries))
+         (starts (mapcar (lambda (entry) (copy-marker (cdr entry)))
+                         (cl-remove-if-not (lambda (entry)
+                                             (equal (car entry) choice))
+                                           entries)))
+         (end (save-excursion
+                (goto-char (my-di--container choice))
+                (copy-marker (org-end-of-subtree t t))))
+         result)
+    (unwind-protect
+        (setq result (my-dm-place text starts end))
+      (dolist (marker (cons end starts)) (set-marker marker nil))
+      (when result (set-marker (plist-get result :start) nil)))
+    (plist-get result :result)))
 
 ;;;###autoload
 (defun my-diario-import-needed-p (&optional policy)
-  "Return non-nil if the current PRIAD has a TODO root to import.
+  "Return non-nil if the current PRIAD has work to import or settle.
 POLICY is `new-only' (default) or `repeat'.  Pending transfers require
 resolution even with older receipts.  Inspect roots without opening a diario,
 prompting, or changing the source."
@@ -361,13 +366,11 @@ prompting, or changing the source."
 
 ;;;###autoload
 (defun my-diario-import (target &optional policy)
-  "Copy TODO roots from the current PRIAD into existing diario TARGET.
-POLICY is `new-only' (default) or `repeat'.  A repeat can offer entries
-previously exported to a different day; it never replaces a diario entry
-already bearing the same DIARIO_KEY.  Return a plist with :copied, :already,
-:exported, and :nested counts.  Leave the source open and unchanged except
-for parent tag preservation, automatic context exclusions, and internal
-identity/export metadata."
+  "Copy TODO or pending PRIAD roots into existing diario TARGET.
+POLICY is `new-only' (default) or `repeat'.  An explicit repeat compares
+complete content inside the chosen list/queue without replacing existing
+work.  Return :copied, :already, :exported, and :nested counts.  Leave the
+source open with durable receipts and cached classification for exports."
   (interactive (list (read-file-name "Diario destino: " denote-journal-directory
                                      nil t)
                      (if current-prefix-arg 'repeat 'new-only)))
@@ -377,95 +380,107 @@ identity/export metadata."
                (source-text (my-di--source-saved source))
                (target-text (my-di--target-text journal))
                (target-before target-text)
-               (index (my-di--with-org target-text #'my-di--target-keys))
+               (_entries (my-di--with-org target-text #'my-di--entries))
                (roots (org-with-wide-buffer (my-di--roots)))
                (markers (car roots))
                (summary (list :copied 0 :already 0 :exported 0
                               :nested (cdr roots)))
                (representations nil)
-               (copies nil)
-               (source-keys (make-hash-table :test 'equal)))
+               (payloads nil))
     (unwind-protect
-        (org-with-wide-buffer
-         ;; Check outstanding exports before preparing any target transfer.
-         (dolist (marker markers)
-           (goto-char marker)
-           (let ((key (org-entry-get nil "DIARIO_KEY"))
-                 (pending (org-entry-get nil "DIARIO_EXPORT_PENDING")))
-             (when (and pending (not (equal pending journal)))
-               (user-error "Exportación pendiente a otro diario: %s" pending))
-             (when (and key (string-empty-p key))
-               (user-error "DIARIO_KEY vacía en PRIAD"))
-             (when (and key (gethash key source-keys))
-               (user-error "DIARIO_KEY repetida en PRIAD: %s" key))
-             (when key (puthash key t source-keys))))
-         (dolist (marker markers)
-           (goto-char marker)
-           (let* ((key (org-entry-get nil "DIARIO_KEY"))
-                  (receipts (my-di--receipts))
-                  (pending (org-entry-get nil "DIARIO_EXPORT_PENDING"))
-                  (existing (and key (gethash key index))))
-             (when (and receipts (not key))
-               (user-error "Recibo sin DIARIO_KEY en el PRIAD"))
-             (when (eq existing 'nested)
-               (user-error "DIARIO_KEY solo está en una nota anidada: %s" key))
-             (cond
-              (existing
-               (push marker representations)
-               (cl-incf (plist-get summary :already)))
-              ((and receipts (not pending) (not (eq policy 'repeat)))
-               (cl-incf (plist-get summary :exported)))
-              (t
-               (let* ((local-tags (org-get-tags nil t))
-                      (parent-tags (my-di--parent-tags))
-                      (inherited (cl-remove-if (lambda (tag)
-                                                 (member tag local-tags))
-                                               parent-tags))
-                      (association (my-di--association local-tags inherited))
-                      (choice (my-di--choice))
-                      (preserved (delete-dups (append local-tags parent-tags))))
-                 (unless (member choice my-di--choices)
-                   (user-error "Destino no válido: %s" choice))
-                 (when parent-tags (org-set-tags preserved))
-                 (my-di--context preserved association)
-                 (unless key
-                   ;; User Org IDs may use second-resolution timestamps; import
-                   ;; identity instead uses UUIDs without changing that setting.
-                   (let ((org-id-method 'uuid))
-                     (setq key (org-id-new 'none))
-                     (while (or (gethash key source-keys) (gethash key index))
-                       (setq key (org-id-new 'none))))
-                   (puthash key t source-keys)
-                   (org-entry-put nil "DIARIO_KEY" key))
-                 (org-entry-put nil "DIARIO_IMPORT_DEST" choice)
-                 (unless (equal pending journal)
-                   (org-entry-put nil "DIARIO_EXPORT_PENDING" journal))
-                 (push (cons marker choice) copies)
-                 (push marker representations))))))
-         ;; Persist the identity and pending destination before any target write.
-         (setq source-text (my-di--save-source source source-text))
-         (setq copies (nreverse copies))
-         (when copies
-           (let ((payloads (mapcar (lambda (item)
-                                     (goto-char (car item))
-                                     (cons (my-di--copy (cdr item)) (cdr item)))
-                                   copies)))
-             (setq target-text
-                   (my-di--with-org target-text
-                    (lambda ()
-                      (dolist (item payloads)
-                        (my-di--append (cdr item) (car item)))
-                      (my-di--target-keys)
-                      (buffer-string))))))
-         (my-di--save-target journal target-before target-text)
-         ;; Only now does a source receipt acknowledge an actual saved entry.
-         (dolist (marker representations)
-           (goto-char marker)
-           (my-di--receipt journal)
-           (org-entry-delete nil "DIARIO_EXPORT_PENDING"))
-         (my-di--save-source source source-text)
-         (setf (plist-get summary :copied) (length copies))
-         summary)
+        (condition-case err
+            (org-with-wide-buffer
+             ;; A pending transfer is tied to its saved target and category,
+             ;; even if its source TODO state changed after an interruption.
+             (dolist (marker markers)
+               (goto-char marker)
+               (let ((pending (org-entry-get nil "DIARIO_EXPORT_PENDING" nil)))
+                 (when (and pending (not (equal pending journal)))
+                   (user-error "Exportación pendiente a otro diario: %s" pending))
+                 (when (and pending
+                            (not (member (org-entry-get nil "DIARIO_IMPORT_DEST" nil)
+                                         my-di--choices)))
+                   (user-error "Exportación pendiente sin destino guardado"))))
+
+             (dolist (marker markers)
+               (goto-char marker)
+               (let ((receipts (my-di--receipts))
+                     (pending (org-entry-get nil "DIARIO_EXPORT_PENDING" nil)))
+                 (if (and receipts (not pending) (not (eq policy 'repeat)))
+                     (cl-incf (plist-get summary :exported))
+                   (let* ((local-tags (org-get-tags nil t))
+                          (parent-tags (my-di--parent-tags))
+                          (inherited (cl-remove-if (lambda (tag)
+                                                     (member tag local-tags))
+                                                   parent-tags))
+                          (association (my-di--association local-tags inherited))
+                          (choice (my-di--choice))
+                          (preserved (delete-dups (append local-tags parent-tags))))
+                     (unless (member choice my-di--choices)
+                       (user-error "Destino no válido: %s" choice))
+                     (when parent-tags (org-set-tags preserved))
+                     (my-di--context preserved association)
+                     (org-entry-put nil "DIARIO_IMPORT_DEST" choice)
+                     (let* ((payload (my-di--copy choice))
+                            (hash (secure-hash 'sha256 (my-dm-text payload)))
+                            (frozen (org-entry-get nil "DIARIO_EXPORT_HASH" nil)))
+                       (when (and pending frozen (not (equal frozen hash)))
+                         (user-error "El contenido pendiente cambió en PRIAD: %s"
+                                     (org-get-heading t t t t)))
+                       ;; Legacy pending roots without a hash freeze their
+                       ;; current classified payload; an old key proves nothing.
+                       (unless pending
+                         (org-entry-put nil "DIARIO_EXPORT_PENDING" journal))
+                       (unless frozen
+                         (org-entry-put nil "DIARIO_EXPORT_HASH" hash))
+                       (push (cons choice payload) payloads)
+                       (push marker representations))))))
+
+             ;; Freeze every eligible payload on disk before any destination
+             ;; save or exact-match acknowledgement.
+             (setq source-text (my-di--save-source source source-text))
+             (setq payloads (nreverse payloads))
+             (when payloads
+               (setq target-text
+                     (my-di--with-org target-text
+                       (lambda ()
+                         (dolist (item payloads)
+                           (pcase (my-di--place (car item) (cdr item))
+                             ('exact (cl-incf (plist-get summary :already)))
+                             ((or 'inserted 'conflict)
+                              (cl-incf (plist-get summary :copied)))))
+                         (buffer-string)))))
+
+             (setq target-before
+                   (my-di--save-target journal target-before target-text))
+             ;; Keep the verified payload as the cleanup precondition: the
+             ;; guarded writer rereads the diary and refuses intervening edits.
+             (setq target-before
+                   (my-di--save-target journal target-before
+                                       (my-dm-clean target-before)))
+             (unless (equal (my-di--target-text journal) target-before)
+               (user-error "No se verificó el diario completo: %s" journal))
+
+             (dolist (marker representations)
+               (goto-char marker)
+               (my-di--receipt journal)
+               (org-entry-delete nil "DIARIO_EXPORT_PENDING")
+               (org-entry-delete nil "DIARIO_EXPORT_HASH")
+               (org-entry-delete nil "DIARIO_KEY"))
+             (my-di--save-source source source-text)
+             summary)
+          (error
+           ;; An acknowledgement can fail midway through a batch.  Restore
+           ;; the last saved pending receipts in the still-open source buffer.
+           (when (and (buffer-modified-p)
+                      (verify-visited-file-modtime (current-buffer)))
+             (let ((saved (my-di--disk source)))
+               (org-with-wide-buffer
+                (erase-buffer)
+                (insert saved)
+                (set-buffer-modified-p nil)
+                (set-visited-file-modtime))))
+           (signal (car err) (cdr err))))
       (dolist (marker markers) (set-marker marker nil)))))
 
 (provide 'diario-import)

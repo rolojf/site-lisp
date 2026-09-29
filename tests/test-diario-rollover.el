@@ -208,7 +208,7 @@
         (should (equal old (my-diario-test--text source)))
         (should (equal new (my-diario-test--text target)))))))
 
-(ert-deftest my-diario-test-retry-refuses-edited-target ()
+(ert-deftest my-diario-test-retry-preserves-edited-target ()
   (my-diario-test--with-files
     (let ((save (symbol-function 'my-diario--save))
           (source-writes 0))
@@ -222,10 +222,125 @@
         (should-error (my-diario-roll source target later "20260603")))
       (my-diario-test--replace target "Contenido profundo."
                                "Contenido profundo editado en destino.")
+      (should (= 4 (plist-get (my-diario-roll source target later "20260603") :moved)))
+      (should-not (string-search "** TODO Trabajo" (my-diario-test--text source)))
+      (let ((new (my-diario-test--text target)))
+        (should (string-search "Contenido profundo editado en destino." new))
+        (should (string-search "Contenido profundo." new))
+        (should (= 2 (my-diario-test--count "** TODO Trabajo" new)))
+        (should (= 1 (my-diario-test--count ":ID: deep-original\n" new)))
+        (should-not (string-search ":DIARIO_KEY:" new))
+        (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text source)))
+        (should (= 2 (my-diario-test--count "# DIARIO: copias con contenido distinto; revisar ambas." new)))
+        (should (= 0 (plist-get (my-diario-roll source target later "20260603") :moved)))
+        (should (equal new (my-diario-test--text target)))))))
+
+(ert-deftest my-diario-test-retry-remaps-retained-id-links ()
+  (my-diario-test--with-files
+    (my-diario-test--replace source "Contenido profundo.\n"
+                             "Contenido profundo. [[id:deep-child-original][Paso]] [[id:externo][Fuera]].\n")
+    (my-diario-test--replace source "*** TODO Subtarea\n"
+                             "*** TODO Subtarea\n:PROPERTIES:\n:ID: deep-child-original\n:END:\n[[id:deep-original][Padre]]\n")
+    (my-diario-test--replace source "Más notas.\n"
+                             "Más notas. [[id:externo][Referencia]].\n")
+    (let ((save (symbol-function 'my-diario--save)) (writes 0))
+      (cl-letf (((symbol-function 'my-diario--save)
+                 (lambda (path expected text)
+                   (when (equal path source)
+                     (cl-incf writes)
+                     (when (= writes 3) (error "Injected prune failure")))
+                   (funcall save path expected text))))
+        (should-error (my-diario-roll source target later "20260603"))))
+    (my-diario-test--replace target "Contenido profundo."
+                             "Contenido editado en destino.")
+    (should (= 4 (plist-get (my-diario-roll source target later "20260603") :moved)))
+    (let ((new (my-diario-test--text target))
+          original retained retained-root retained-child)
+      (should (= 1 (my-diario-test--count ":ID: deep-original\n" new)))
+      (should (= 1 (my-diario-test--count ":ID: deep-child-original\n" new)))
+      (should (= 2 (my-diario-test--count "** TODO Trabajo" new)))
+      (should (string-search "[[id:externo][Referencia]]" new))
+      (my-diario--with-text new
+        (dolist (entry (my-diario--scan))
+          (when (and (equal (my-diario--entry-list entry) "DEEP")
+                     (string-search "** TODO Trabajo"
+                                    (my-diario--subtree new entry)))
+            (let ((tree (my-diario--subtree new entry)))
+              (goto-char (my-diario--entry-start entry))
+              (let ((root-id (org-entry-get nil "ID" nil))
+                    (child-id (save-excursion
+                                (re-search-forward "^\\*\\*\\* TODO Subtarea"
+                                                   (my-diario--entry-end entry) t)
+                                (org-entry-get nil "ID" nil))))
+                (if (string-search "Contenido editado en destino." tree)
+                    (setq retained tree retained-root root-id retained-child child-id)
+                  (setq original tree)))))))
+      (should original)
+      (should retained)
+      (should (string-search ":ID: deep-original\n" original))
+      (should (string-search ":ID: deep-child-original\n" original))
+      (should (string-search "[[id:deep-child-original][Paso]]" original))
+      (should (string-search "[[id:deep-original][Padre]]" original))
+      (should (and retained-root retained-child
+                   (not (equal retained-root "deep-original"))
+                   (not (equal retained-child "deep-child-original"))
+                   (not (equal retained-root retained-child))))
+      (should (string-search (format "[[id:%s][Paso]]" retained-child) retained))
+      (should (string-search (format "[[id:%s][Padre]]" retained-root) retained))
+      (should (string-search "[[id:externo][Fuera]]" retained))
+      (should-not (string-search ":DIARIO_KEY:" new))
+      (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text source)))
+      (should (= 0 (plist-get (my-diario-roll source target later "20260603") :moved)))
+      (should (equal new (my-diario-test--text target))))))
+
+(ert-deftest my-diario-test-retry-remap-save-failure ()
+  (my-diario-test--with-files
+    (let ((save (symbol-function 'my-diario--save)) (writes 0))
+      (cl-letf (((symbol-function 'my-diario--save)
+                 (lambda (path expected text)
+                   (when (equal path source)
+                     (cl-incf writes)
+                     (when (= writes 3) (error "Injected prune failure")))
+                   (funcall save path expected text))))
+        (should-error (my-diario-roll source target later "20260603"))))
+    (my-diario-test--replace target "Contenido profundo."
+                             "Contenido editado en destino.")
+    (let ((before (my-diario-test--text target))
+          (save (symbol-function 'my-diario--save)))
+      (cl-letf (((symbol-function 'my-diario--save)
+                 (lambda (path expected text)
+                   (if (equal path target) (error "Injected remap save failure")
+                     (funcall save path expected text)))))
+        (should-error (my-diario-roll source target later "20260603")))
+      (should (equal before (my-diario-test--text target)))
+      (should (string-search "** TODO Trabajo" (my-diario-test--text source))))
+    (should (= 4 (plist-get (my-diario-roll source target later "20260603") :moved)))
+    (let ((new (my-diario-test--text target)))
+      (should (= 1 (my-diario-test--count ":ID: deep-original\n" new)))
+      (should (= 2 (my-diario-test--count "** TODO Trabajo" new)))
+      (should-not (string-search ":DIARIO_KEY:" new))
+      (should (= 0 (plist-get (my-diario-roll source target later "20260603") :moved)))
+      (should (equal new (my-diario-test--text target))))))
+
+(ert-deftest my-diario-test-retry-blocks-foreign-id ()
+  (dolist (list-name '("DEEP" "SHALLOW"))
+    (my-diario-test--with-files
+      (let ((save (symbol-function 'my-diario--save)))
+        (cl-letf (((symbol-function 'my-diario--save)
+                   (lambda (path expected text)
+                     (if (equal path target) (error "Injected destination failure")
+                       (funcall save path expected text)))))
+          (should-error (my-diario-roll source target later "20260603"))))
+      (with-temp-file target
+        (insert "#+title: Hoy\n#+identifier: hoy-id\n\n"
+                "* OPORTUNIDADES Y AMENAZAS\n** Contratista\n** Empresa\n"
+                "* DEEP\n" (if (equal list-name "DEEP")
+                               "** TODO Otro\n:PROPERTIES:\n:ID: deep-original\n:END:\n" "")
+                "* SHALLOW\n" (if (equal list-name "SHALLOW")
+                                  "** TODO Otro\n:PROPERTIES:\n:ID: deep-original\n:END:\n" "")))
       (let ((old (my-diario-test--text source))
             (new (my-diario-test--text target)))
-        (should-error (my-diario-roll source target later "20260603")
-                      :type 'user-error)
+        (should-error (my-diario-roll source target later "20260603") :type 'user-error)
         (should (equal old (my-diario-test--text source)))
         (should (equal new (my-diario-test--text target)))))))
 
@@ -362,7 +477,7 @@
       (should-not (string-search "SCHEDULED: <2026-06-17" (my-diario-test--text source)))
       (should (string-search "*** COLD Frío OT" (my-diario-test--text source))))))
 
-(ert-deftest my-diario-test-park-retry-refuses-edited-later ()
+(ert-deftest my-diario-test-park-retry-preserves-edited-later ()
   (my-diario-test--with-files
     (let ((save (symbol-function 'my-diario--save))
           (writes 0))
@@ -373,31 +488,42 @@
                      (when (= writes 2) (error "Injected park acknowledgement failure")))
                    (funcall save path expected text))))
         (should-error (my-diario-park source later "20260603")))
-      (my-diario-test--replace later "Frío superficial" "Frío superficial editado")
-      (let ((old (my-diario-test--text source))
-            (parked (my-diario-test--text later)))
-        (should-error (my-diario-park source later "20260604") :type 'user-error)
-        (should (equal old (my-diario-test--text source)))
+      (with-temp-file later
+        (insert (my-diario-test--text later) "Nota editada en LUEGO.\n"))
+      (should (= 1 (plist-get (my-diario-park source later "20260604") :parked)))
+      (let ((parked (my-diario-test--text later)))
+        (should (string-search "Nota editada en LUEGO." parked))
+        (should (= 2 (my-diario-test--count "** COLD Frío superficial\n" parked)))
+        (should (= 2 (my-diario-test--count
+                      "# DIARIO: copias con contenido distinto; revisar ambas." parked)))
+        (should (= 0 (plist-get (my-diario-park source later "20260604") :parked)))
         (should (equal parked (my-diario-test--text later)))))))
 
-(ert-deftest my-diario-test-return-retry-refuses-edited-target ()
+(ert-deftest my-diario-test-return-retry-preserves-edited-target ()
   (my-diario-test--with-files
     (my-diario-park source later "20260603")
     (my-diario-test--replace target "#+identifier: hoy-id\n\n"
                              "#+identifier: hoy-id\n\n* OPORTUNIDADES Y AMENAZAS\n** Contratista\n** Empresa\n* DEEP\n* SHALLOW\n")
-    (let ((save (symbol-function 'my-diario--save)))
+    (let ((save (symbol-function 'my-diario--save)) (later-writes 0))
       (cl-letf (((symbol-function 'my-diario--save)
                  (lambda (path expected text)
-                   (if (equal path later)
-                       (error "Injected LUEGO removal failure")
-                     (funcall save path expected text)))))
+                   (when (equal path later)
+                     (cl-incf later-writes)
+                     (when (= later-writes 2)
+                       (error "Injected LUEGO removal failure")))
+                   (funcall save path expected text))))
         (should-error (my-diario-return target later "20260620"))))
-    (my-diario-test--replace target "Frío superficial" "Frío superficial editado")
-    (let ((new (my-diario-test--text target))
-          (parked (my-diario-test--text later)))
-      (should-error (my-diario-return target later "20260621") :type 'user-error)
-      (should (equal new (my-diario-test--text target)))
-      (should (equal parked (my-diario-test--text later))))))
+    (with-temp-file target
+      (insert (my-diario-test--text target) "Nota editada en destino.\n"))
+    (should (= 1 (plist-get (my-diario-return target later "20260621") :returned)))
+    (let ((new (my-diario-test--text target)))
+      (should (= 2 (my-diario-test--count "** NEXT Frío superficial" new)))
+      (should (= 2 (my-diario-test--count
+                    "# DIARIO: copias con contenido distinto; revisar ambas." new)))
+      (should (string-search ":DIARIO_ACTUAL_RETURN: [2026-06-20" new))
+      (should (string-search "Nota editada en destino." new))
+      (should-not (string-search "Frío superficial" (my-diario-test--text later)))
+      (should (= 0 (plist-get (my-diario-return target later "20260621") :returned))))))
 
 (ert-deftest my-diario-test-frontmatter-and-nested-ids ()
   (my-diario-test--with-files
@@ -618,6 +744,358 @@
       (my-diario-roll source target later "20260603")
       (should (equal before (my-diario-test--text target)))
       (should (string-search "** TODO Trabajo" (my-diario-test--text source))))))
+
+(ert-deftest my-diario-test-keyless-recursive-cleanup ()
+  (my-diario-test--with-files
+    (my-diario-test--replace source "**** TODO Detalle anidado\n"
+                             "**** TODO Detalle anidado\n:PROPERTIES:\n:DIARIO_KEY: nested-old\n:END:\n")
+    (my-diario-test--replace source ":ID: note-original\n"
+                             ":ID: note-original\n:DIARIO_KEY: note-old\n")
+    (my-diario-test--replace source ":ID: ot-original\n"
+                             ":ID: ot-original\n:DIARIO_KEY: ot-old\n")
+    (my-diario-test--replace source ":ID: deep-original\n"
+                             ":ID: deep-original\n:DIARIO_KEY: deep-old\n")
+    (my-diario-roll source target later "20260603")
+    (dolist (path (list source target))
+      (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text path)))
+      (should-not (string-search ":DIARIO_ROLL_HASH:" (my-diario-test--text path))))
+    (should (string-search ":DIARIO_PARKED_TO:" (my-diario-test--text source)))
+    (should (string-search ":DIARIO_KEY:" (my-diario-test--text later)))
+    (should (= 0 (plist-get (my-diario-roll source target later "20260604") :moved)))))
+
+(ert-deftest my-diario-test-duplicate-legacy-keys-in-diario ()
+  (my-diario-test--with-files
+    (my-diario-test--replace source "*** WAIT Primero :cliente_1:\n"
+                             "*** WAIT Primero :cliente_1:\n:PROPERTIES:\n:DIARIO_KEY: legacy-duplicate\n:END:\n")
+    (my-diario-test--replace source "** TODO Trabajo :cliente_2:\n"
+                             "** TODO Trabajo :cliente_2:\n:PROPERTIES:\n:DIARIO_KEY: legacy-duplicate\n:END:\n")
+    (should (= 4 (plist-get (my-diario-roll source target later "20260603") :moved)))
+    (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text source)))
+    (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text target)))))
+
+(ert-deftest my-diario-test-pending-legacy-hash-before-key-cleanup ()
+  (my-diario-test--with-files
+    (my-diario-test--replace source "** TODO Trabajo :cliente_2:\n"
+                             "** TODO Trabajo :cliente_2:\n:PROPERTIES:\n:DIARIO_KEY: old-fingerprint\n:END:\n")
+    (let ((save (symbol-function 'my-diario--save)) (failed nil))
+      (cl-letf (((symbol-function 'my-diario--save)
+                 (lambda (path before text)
+                   (when (and (equal path target) (not failed))
+                     (setq failed t) (error "Injected target save failure"))
+                   (funcall save path before text))))
+        (should-error (my-diario-roll source target later "20260603"))))
+    (should (string-search ":DIARIO_KEY: old-fingerprint" (my-diario-test--text source)))
+    (should (string-search ":DIARIO_ROLL_HASH:" (my-diario-test--text source)))
+    (should (= 4 (plist-get (my-diario-roll source target later "20260604") :moved)))
+    (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text source)))
+    (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text target)))))
+
+(ert-deftest my-diario-test-return-freezes-date-on-next-day-retry ()
+  (my-diario-test--with-files
+    (my-diario-park source later "20260603")
+    (my-diario-test--replace target "#+identifier: hoy-id\n\n"
+                             "#+identifier: hoy-id\n\n* OPORTUNIDADES Y AMENAZAS\n** Contratista\n** Empresa\n* DEEP\n* SHALLOW\n")
+    (let ((save (symbol-function 'my-diario--save)))
+      (cl-letf (((symbol-function 'my-diario--save)
+                 (lambda (path before text)
+                   (if (equal path target) (error "Injected destination save failure")
+                     (funcall save path before text)))))
+        (should-error (my-diario-return target later "20260620"))))
+    (should (string-search ":DIARIO_ROLL_TO:" (my-diario-test--text later)))
+    (should (string-search ":DIARIO_RETURN_DATE: 20260620" (my-diario-test--text later)))
+    (should (= 3 (plist-get (my-diario-return target later "20260621") :returned)))
+    (should (= 3 (my-diario-test--count ":DIARIO_ACTUAL_RETURN: [2026-06-20"
+                                       (my-diario-test--text target))))
+    (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text target)))))
+
+(ert-deftest my-diario-test-cleanup-interruption-retries ()
+  (my-diario-test--with-files
+    (my-diario-test--replace source ":ID: ot-original\n"
+                             ":ID: ot-original\n:DIARIO_KEY: cleanup-ot\n")
+    (let ((clean (symbol-function 'my-diario-clean)) (failed nil))
+      (cl-letf (((symbol-function 'my-diario-clean)
+                 (lambda (path)
+                   (when (and (equal path target) (not failed))
+                     (setq failed t) (error "Injected cleanup failure"))
+                   (funcall clean path))))
+        (should-error (my-diario-roll source target later "20260603"))))
+    (should-not (string-search "** TODO Trabajo" (my-diario-test--text source)))
+    (should (string-search ":DIARIO_KEY:" (my-diario-test--text target)))
+    (my-diario-roll source target later "20260604")
+    (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text target)))
+    (should (= 1 (my-diario-test--count "** TODO Trabajo" (my-diario-test--text target))))))
+
+(ert-deftest my-diario-test-keyless-active-receipt-on-failure ()
+  (my-diario-test--with-files
+    (let ((save (symbol-function 'my-diario--save)))
+      (cl-letf (((symbol-function 'my-diario--save)
+                 (lambda (path expected text)
+                   (if (equal path target)
+                       (error "Injected destination failure")
+                     (funcall save path expected text)))))
+        (should-error (my-diario-roll source target later "20260603"))))
+    (let ((old (my-diario-test--text source)))
+      (should (string-search "DIARIO_ROLL_HASH:" old))
+      (my-diario--with-text old
+        (dolist (entry (my-diario--scan))
+          (when (member (my-diario--entry-state entry) my-diario--active)
+            (should-not (my-diario--entry-key entry)))))
+      (should-error (my-diario-clean source) :type 'user-error)
+      (should (equal old (my-diario-test--text source))))
+    (should (= 4 (plist-get (my-diario-roll source target later "20260603") :moved)))))
+
+(ert-deftest my-diario-test-pending-transfer-scope-and-adjacency ()
+  (my-diario-test--with-files
+    (let ((save (symbol-function 'my-diario--save)))
+      (cl-letf (((symbol-function 'my-diario--save)
+                 (lambda (path expected text)
+                   (if (equal path target) (error "Injected destination failure")
+                     (funcall save path expected text)))))
+        (should-error (my-diario-roll source target later "20260603"))))
+    (with-temp-file target
+      (insert "#+title: Hoy\n#+identifier: hoy-id\n\n"
+              "* OPORTUNIDADES Y AMENAZAS\n** Contratista\n** Empresa\n"
+              "* DEEP\n** TODO Manual :cliente_2:\nManual.\n"
+              "** TODO Trabajo :cliente_2:\nContenido editado.\n"
+              "** TODO Archivo :cliente_3:\nArchivo.\n"
+              "* SHALLOW\n** TODO Igual\n:PROPERTIES:\n:CUSTOM: diferente\n:END:\n"))
+    (should (= 4 (plist-get (my-diario-roll source target later "20260604") :moved)))
+    (let ((new (my-diario-test--text target)))
+      (should (< (string-search "** TODO Manual" new)
+                 (string-search "Contenido editado." new)
+                 (string-search "Contenido profundo." new)
+                 (string-search "** TODO Archivo" new)
+                 (string-search "* SHALLOW" new)))
+      (should (= 2 (my-diario-test--count "** TODO Trabajo" new)))
+      (should (= 2 (my-diario-test--count "** TODO Igual\n" new)))
+      (should (= 4 (my-diario-test--count
+                    "# DIARIO: copias con contenido distinto; revisar ambas." new)))
+      (should-not (string-search "*** WAIT Primero" new))
+      (should-not (string-search ":DIARIO_KEY:" new)))
+    (should-not (string-search "** TODO Trabajo" (my-diario-test--text source)))))
+
+(ert-deftest my-diario-test-park-conflicting-key-allocates-new ()
+  (my-diario-test--with-files
+    (my-diario-test--replace source "** COLD Frío superficial\n"
+                             "** COLD Frío superficial\n:PROPERTIES:\n:DIARIO_KEY: parked-collision\n:END:\n")
+    (with-temp-file later
+      (insert "* LUEGO\n** COLD Frío superficial\n"
+              "SCHEDULED: <2026-06-17 Wed>\n:PROPERTIES:\n"
+              ":DIARIO_KEY: parked-collision\n:DIARIO_LIST: SHALLOW\n"
+              (format ":DIARIO_ORIGIN_HASH: %s\n"
+                      (my-diario--origin-hash "parked-collision" "SHALLOW" nil))
+              ":END:\nNota previa.\n"))
+    (should (= 3 (plist-get (my-diario-park source later "20260603") :parked)))
+    (let ((text (my-diario-test--text later)) copies)
+      (my-diario--with-text text
+        (dolist (entry (my-diario--later-scan))
+          (when (and (equal (my-diario--entry-list entry) "SHALLOW")
+                     (save-excursion
+                       (goto-char (my-diario--entry-start entry))
+                       (equal (org-get-heading t t t t) "Frío superficial")))
+            (push (my-diario--entry-key entry) copies)
+            (goto-char (my-diario--entry-start entry))
+            (should (equal (org-entry-get nil "DIARIO_ORIGIN_HASH")
+                           (my-diario--origin-hash (my-diario--entry-key entry)
+                                                   "SHALLOW" nil))))))
+      (should (= 2 (length copies)))
+      (should (member "parked-collision" copies))
+      (should (= 2 (my-diario-test--count "** COLD Frío superficial" text)))
+      (should (= 2 (my-diario-test--count
+                    "# DIARIO: copias con contenido distinto; revisar ambas." text)))
+      (should (string-search "Nota previa." text))
+      (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text source)))
+      (should (string-search ":DIARIO_PARKED_TO:" (my-diario-test--text source)))
+      (should (= 0 (plist-get (my-diario-park source later "20260604") :parked)))
+      (should (equal text (my-diario-test--text later))))))
+
+(ert-deftest my-diario-test-park-origin-scope-and-exact-reuse ()
+  (my-diario-test--with-files
+    (my-diario-test--replace source "*** DONE Cerrado\n"
+                             "*** COLD Frío OT :cliente_a:\nSCHEDULED: <2026-06-10 Wed>\nContratista.\n*** DONE Cerrado\n")
+    (my-diario-test--replace source "*** COLD Frío OT\nSCHEDULED: <2026-06-10 Wed>\n"
+                             "*** COLD Frío OT :cliente_a:\nSCHEDULED: <2026-06-10 Wed>\nEmpresa.\n")
+    (my-diario-test--replace source "** COLD Frío profundo\n"
+                             "** COLD Frío profundo\n** COLD Frío superficial\nLista profunda.\n")
+    (should (= 5 (plist-get (my-diario-park source later "20260603") :parked)))
+    (let ((parked (my-diario-test--text later)))
+      (should (= 2 (my-diario--with-text parked
+                     (cl-count-if (lambda (entry)
+                                    (equal (my-diario--entry-list entry)
+                                           "OPORTUNIDADES Y AMENAZAS"))
+                                  (my-diario--later-scan)))))
+      (should-not (string-search "# DIARIO:" parked)))
+    (with-temp-file target
+      (insert "#+title: Hoy\n#+identifier: hoy-id\n\n"
+              "* OPORTUNIDADES Y AMENAZAS\n** Contratista\n** Empresa\n"
+              "* DEEP\n* SHALLOW\n"))
+    (should (= 5 (plist-get (my-diario-return target later "20260620") :returned)))
+    (let ((new (my-diario-test--text target)))
+      (my-diario--with-text new
+        (let ((entries (my-diario--scan)))
+          (dolist (case '(("Contratista" . "Contratista.")
+                          ("Empresa" . "Empresa.")))
+            (should (cl-some (lambda (entry)
+                               (and (equal (my-diario--entry-bucket entry) (car case))
+                                    (string-search (cdr case)
+                                                   (my-diario--subtree new entry))))
+                             entries)))
+          (should (cl-some (lambda (entry)
+                             (and (equal (my-diario--entry-list entry) "DEEP")
+                                  (string-search "Lista profunda."
+                                                 (my-diario--subtree new entry))))
+                           entries))))
+      (should (= 2 (my-diario-test--count "** NEXT Frío superficial" new)))
+      (should-not (string-search "# DIARIO:" new)))))
+
+(ert-deftest my-diario-test-legacy-return-unique-date-and-ambiguous ()
+  (my-diario-test--with-files
+    (my-diario-park source later "20260603")
+    (let* ((parked (my-diario-test--text later))
+           (entry (my-diario--with-text parked
+                    (cl-find-if (lambda (item)
+                                  (equal (my-diario--entry-list item) "SHALLOW"))
+                                (my-diario--later-scan))))
+           (returned (my-diario--returned (my-diario--subtree parked entry)
+                                          entry "20260620")))
+      (with-temp-file target
+        (insert "#+title: Hoy\n#+identifier: hoy-id\n\n"
+                "* OPORTUNIDADES Y AMENAZAS\n** Contratista\n** Empresa\n"
+                "* DEEP\n* SHALLOW\n" returned))
+      (let ((before (my-diario-test--text target)))
+        (with-temp-file target (insert before returned))
+        (let ((ambiguous (my-diario-test--text target)))
+          (should-error (my-diario-return target later "20260621")
+                        :type 'user-error)
+          (should (equal ambiguous (my-diario-test--text target)))
+          (should (equal parked (my-diario-test--text later)))))
+      (with-temp-file target (insert (substring (my-diario-test--text target)
+                                             0 (- (length (my-diario-test--text target))
+                                                  (length returned)))))
+      (should (= 2 (plist-get (my-diario-return target later "20260621") :returned)))
+      (let ((new (my-diario-test--text target)))
+        (should (= 1 (my-diario-test--count "** NEXT Frío superficial" new)))
+        (should (= 1 (my-diario-test--count ":DIARIO_ACTUAL_RETURN: [2026-06-20" new)))
+        (should-not (string-search ":DIARIO_KEY:" new)))
+      (should-not (string-search "Frío superficial" (my-diario-test--text later))))))
+
+(ert-deftest my-diario-test-pending-return-rejects-other-target ()
+  (my-diario-test--with-files
+    (my-diario-park source later "20260603")
+    (with-temp-file target
+      (insert "#+title: Hoy\n#+identifier: hoy-id\n\n"
+              "* OPORTUNIDADES Y AMENAZAS\n** Contratista\n** Empresa\n"
+              "* DEEP\n* SHALLOW\n"))
+    (let ((save (symbol-function 'my-diario--save)))
+      (cl-letf (((symbol-function 'my-diario--save)
+                 (lambda (path expected text)
+                   (if (equal path target) (error "Injected destination failure")
+                     (funcall save path expected text)))))
+        (should-error (my-diario-return target later "20260620"))))
+    (let* ((next (expand-file-name "20260621-journal.org" dir))
+           (original (my-diario-test--text target))
+           (pending (my-diario-test--text later)))
+      (with-temp-file next (insert original))
+      (should-error (my-diario-return next later "20260621") :type 'user-error)
+      (should (equal original (my-diario-test--text next)))
+      (should (equal pending (my-diario-test--text later)))
+      (should (= 3 (plist-get (my-diario-return target later "20260621") :returned)))
+      (should (= 3 (my-diario-test--count ":DIARIO_ACTUAL_RETURN: [2026-06-20"
+                                         (my-diario-test--text target)))))))
+
+(ert-deftest my-diario-test-return-cleanup-failure-retry ()
+  (my-diario-test--with-files
+    (my-diario-park source later "20260603")
+    (with-temp-file target
+      (insert "#+title: Hoy\n#+identifier: hoy-id\n\n"
+              "* OPORTUNIDADES Y AMENAZAS\n** Contratista\n** Empresa\n"
+              "* DEEP\n* SHALLOW\n"))
+    (let ((clean (symbol-function 'my-diario-clean)))
+      (cl-letf (((symbol-function 'my-diario-clean)
+                 (lambda (path)
+                   (if (equal path target) (error "Injected cleanup failure")
+                     (funcall clean path)))))
+        (should-error (my-diario-return target later "20260620"))))
+    (should-not (string-search "Frío superficial" (my-diario-test--text later)))
+    (should (string-search ":DIARIO_KEY:" (my-diario-test--text target)))
+    (should (= 0 (plist-get (my-diario-return target later "20260621") :returned)))
+    (should-not (string-search ":DIARIO_KEY:" (my-diario-test--text target)))))
+
+(ert-deftest my-diario-test-verify-saved-target-before-prune ()
+  (my-diario-test--with-files
+    (let ((save (symbol-function 'my-diario--save)) (changed nil))
+      (cl-letf (((symbol-function 'my-diario--save)
+                 (lambda (path expected text)
+                   (prog1 (funcall save path expected text)
+                     (when (and (equal path target) (not changed))
+                       (setq changed t)
+                       (my-diario-test--replace target "Contenido profundo."
+                                                "Contenido intervenido."))))))
+        (should-error (my-diario-roll source target later "20260603")
+                      :type 'user-error)))
+    (should (string-search "** TODO Trabajo" (my-diario-test--text source)))
+    (should (string-search "Contenido intervenido." (my-diario-test--text target)))
+    (should (= 4 (plist-get (my-diario-roll source target later "20260603") :moved)))
+    (should (= 2 (my-diario-test--count "** TODO Trabajo"
+                                       (my-diario-test--text target))))))
+
+(ert-deftest my-diario-test-clean-refuses-unsaved-or-stale-visitor ()
+  (my-diario-test--with-files
+    (my-diario-test--replace source ":ID: ot-original\n"
+                             ":ID: ot-original\n:DIARIO_KEY: old-note\n")
+    (let ((visitor (find-file-noselect source))
+          (before (my-diario-test--text source)))
+      (with-current-buffer visitor
+        (goto-char (point-max)) (insert "Cambio sin guardar"))
+      (should-error (my-diario-clean source) :type 'user-error)
+      (should (equal before (my-diario-test--text source)))
+      (with-current-buffer visitor
+        (set-buffer-modified-p nil))
+      (my-diario-test--replace source "Texto del día." "Texto alterado afuera.")
+      (should-error (my-diario-clean source) :type 'user-error)
+      (should (string-search ":DIARIO_KEY: old-note" (my-diario-test--text source))))))
+
+(ert-deftest my-diario-test-park-reuses-equal-without-sweeping ()
+  (my-diario-test--with-files
+    (my-diario-test--replace source "** COLD Frío superficial\n"
+                             "** COLD Frío superficial\n** COLD Frío superficial\n")
+    (should (= 3 (plist-get (my-diario-park source later "20260603") :parked)))
+    (let ((old (my-diario-test--text source))
+          (parked (my-diario-test--text later)))
+      (should (= 2 (my-diario-test--count "** COLD Frío superficial" old)))
+      (should (= 1 (my-diario-test--count "** COLD Frío superficial" parked)))
+      (should-not (string-search "# DIARIO:" parked))
+      (should-not (string-search ":DIARIO_KEY:" old))
+      (should (= 0 (plist-get (my-diario-park source later "20260604") :parked)))
+      (should (equal parked (my-diario-test--text later))))))
+
+(ert-deftest my-diario-test-luego-duplicate-key-stays-blocked ()
+  (my-diario-test--with-files
+    (my-diario-park source later "20260603")
+    (let* ((text (my-diario-test--text later))
+           (entry (my-diario--with-text text (car (my-diario--later-scan)))))
+      (with-temp-file later (insert text (my-diario--subtree text entry))))
+    (with-temp-file target
+      (insert "#+title: Hoy\n#+identifier: hoy-id\n\n"
+              "* OPORTUNIDADES Y AMENAZAS\n** Contratista\n** Empresa\n"
+              "* DEEP\n* SHALLOW\n"))
+    (let ((before (my-diario-test--text target))
+          (parked (my-diario-test--text later)))
+      (should-error (my-diario-return target later "20260620")
+                    :type 'user-error)
+      (should (equal before (my-diario-test--text target)))
+      (should (equal parked (my-diario-test--text later))))))
+
+(ert-deftest my-diario-test-one-placement-pass ()
+  (my-diario-test--with-files
+    (let ((place (symbol-function 'my-diario--transfers))
+          (calls 0))
+      (cl-letf (((symbol-function 'my-diario--transfers)
+                 (lambda (&rest arguments)
+                   (cl-incf calls)
+                   (apply place arguments))))
+        (my-diario-roll source target later "20260603"))
+      (should (= 1 calls)))))
 
 (provide 'test-diario-rollover)
 ;;; test-diario-rollover.el ends here

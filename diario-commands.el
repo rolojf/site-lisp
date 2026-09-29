@@ -232,8 +232,9 @@ Return the configured target alist, or nil when there is no current diario."
           (my-dc--layout source)
           (my-diario-roll source target later date))
       (when fresh (my-dc--initialize target))
-      (list :mode kind
-            :returned (plist-get (my-diario-return target later date) :returned)))))
+      (let ((returned (plist-get (my-diario-return target later date) :returned)))
+        (when source (my-diario-clean source))
+        (list :mode kind :returned returned)))))
 
 ;;;###autoload
 (defun my-diario-today ()
