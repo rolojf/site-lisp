@@ -22,8 +22,7 @@
              nil utf-8)
           )
 )
-(setq ispell-dictionary "es_MX")
-(setq ispell-local-dictionary "es_MX")
+(setq ispell-dictionary "en_US")
 (setq ispell-alternate-dictionary "/usr/share/hunspell/en_US.aff")
 ;;
 ;; Activate flyspell
@@ -34,6 +33,18 @@
 ;;(mapcar (lambda (mode-hook) (add-hook mode-hook 'flyspell-prog-mode))
 ;;    '(c-mode-common-hook R-mode-hook emacs-lisp-mode-hook))
 (add-hook 'org-mode-hook 'turn-on-flyspell)
+
+(defun rolo/spell-english ()
+  "Use US English spelling in the current buffer."
+  (ispell-change-dictionary "en_US"))
+
+(defun rolo/spell-spanish ()
+  "Use Mexican Spanish spelling in the current buffer."
+  (ispell-change-dictionary "es_MX"))
+
+(add-hook 'markdown-mode-hook #'rolo/spell-english)
+(add-hook 'md-mode-hook #'rolo/spell-english)
+(add-hook 'org-mode-hook #'rolo/spell-spanish)
 
 ;; Debounce flyspell so it runs on idle rather than on every keystroke.
 (when (maybe-require-package 'flyspell-lazy)

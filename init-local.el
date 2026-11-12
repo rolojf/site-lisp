@@ -34,6 +34,10 @@
 ;; (require 'setup-gleam)
 (require 'setup-wsl)
 (require 'setup-markdown)
+
+;; Wrap prose by visual lines in text-derived modes.
+(add-hook 'text-mode-hook #'visual-line-mode)
+
 ;; (require 'setup-remote)
 ;; (require 'setup-pass)
 ;; (require 'setup-origami)
